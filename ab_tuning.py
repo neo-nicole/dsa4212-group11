@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 from generate_instances import load_dataset, by_family
 from src.baselines import simulate, first_fit, best_fit, make_ab_first_fit
 
-A_MAX, B_MAX = 15, 40 # selected arbitrarily, widen search if needed
+A_MAX, B_MAX = 30, 45 # selected arbitrarily, widen search if needed
 OUT_DIR = "outputs"
 
 def excess_bin_pct(inst, heuristic):
@@ -33,6 +33,17 @@ def family_scores(groups, heuristic):
     """mean excess % for each family"""
     return [np.mean([excess_bin_pct(inst, heuristic) for inst in insts])
             for insts in groups.values()]
+
+def paired_diff(groups, h1, h2, n_boot=2000, seed=0):
+    """
+    compare 2 heuristics on same instances
+    returns mean difference in excess bin pct, 95% ci for mean difference
+    """
+    d = np.array([excess_bin_pct(i, h1) - excess_bin_pct(i, h2)
+                  for insts in groups.values() for i in insts])
+    rng = np.random.default_rng(seed)
+    boots = [rng.choice(d, len(d)).mean() for _ in range(n_boot)]
+    return d.mean(), np.percentile(boots, [2.5, 97.5])
 
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -64,6 +75,10 @@ def main():
     v_ab = float(np.mean(family_scores(val, make_ab_first_fit(a_best, b_best))))
     v_ff = float(np.mean(family_scores(val, first_fit)))
     v_bf = float(np.mean(family_scores(val, best_fit)))
+
+    ab_val = make_ab_first_fit(a_best, b_best)
+    mean_d, ci = paired_diff(val, ab_val, best_fit)
+    print(f"val ab - best fit = {mean_d:+.3f}pp, 95% CI [{ci[0]:+.3f}, {ci[1]:+.3f}]")
     print(f"val: ab = {v_ab:.3f}%   first fit = {v_ff:.3f}%   best fit = {v_bf:.3f}%")
 
     # save params
