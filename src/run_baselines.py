@@ -1,6 +1,6 @@
 #testing the evaluator too
-from evaluation import evaluate
-from baselines import (
+from src.evaluation import evaluate
+from src.baselines import (
     first_fit,
     best_fit,
     make_ab_first_fit
@@ -28,4 +28,3 @@ for name, heuristic in heuristics.items():
 
         for family, score in result["family_scores"].items():
             print(f"  {family}: {score:.4f}")
-

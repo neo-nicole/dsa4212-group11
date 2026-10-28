@@ -3,7 +3,7 @@ import time
 import math
 import statistics
 from collections import defaultdict
-from baselines import simulate, first_fit, best_fit, make_ab_first_fit
+from src.baselines import simulate, first_fit, best_fit, make_ab_first_fit
 
 def load_instances(filepath):
     with open(filepath, "r") as f:
