@@ -3,23 +3,78 @@ import time
 import math
 import statistics
 from collections import defaultdict
-from baselines import simulate, first_fit, best_fit
+from baselines import simulate, first_fit, best_fit, make_ab_first_fit
 
 def load_instances(filepath):
     with open(filepath, "r") as f:
         return json.load(f)
 
+from pathlib import Path
+
+#config
+ROOT = Path(__file__).resolve().parent.parent
+DATA_DIR = ROOT / "data"
+
+SPLITS = {
+    "train": DATA_DIR / "train.json",
+    "val": DATA_DIR / "val.json",
+    "validation": DATA_DIR / "val.json",
+    "test": DATA_DIR / "test.json"
+}
+
+#load datasets
+def load_instances(filepath):
+    with open(filepath, "r") as f:
+        return json.load(f)
+
+
+def resolve_dataset(dataset):
+    """
+    Accept:
+    1. Split name: "train", "val", "test"
+    2. JSON filepath: "data/train.json"
+    3. Already-loaded dataset dictionary
+    """
+
+    if isinstance(dataset, dict):
+        return dataset
+
+    if isinstance(dataset, (str, Path)):
+        if str(dataset).lower() in SPLITS:
+            return load_instances(
+                SPLITS[str(dataset).lower()]
+            )
+
+        return load_instances(dataset)
+
+    raise TypeError(
+        "dataset must be a split name, "
+        "JSON filepath, or dictionary"
+    )
+
+
 #eval heuristic
+#eval one instance
 def evaluate_instance(heuristic, instance_id, instance):
 
     items = instance["items"]
     capacity = instance["capacity"]
     family = instance["family"]
 
-    #check for dataset consistency
     if len(items) != instance["num_items"]:
         raise ValueError(
             f"Incorrect num_items for {instance_id}"
+        )
+
+    if type(capacity) is not int or capacity <= 0:
+        raise ValueError("Invalid bin capacity")
+
+    if any(
+        type(item) is not int or not 1 <= item <= capacity
+        for item in items
+    ):
+        raise ValueError(
+            f"Invalid item size in {instance_id}"
         )
 
     start = time.perf_counter()
@@ -36,10 +91,8 @@ def evaluate_instance(heuristic, instance_id, instance):
 
     runtime = time.perf_counter() - start
 
-    #theoretical lower bound
     lower_bound = math.ceil(sum(items) / capacity)
 
-    #where lower score is better
     if feasible:
         score = (
             bins_used / lower_bound
@@ -61,7 +114,26 @@ def evaluate_instance(heuristic, instance_id, instance):
     }
 
 #eval on whole dataset
-def evaluate(heuristic, dataset):
+def evaluate(heuristic, dataset="train"):
+    """
+    Evaluate any heuristic on a dataset.
+
+    heuristic:
+        Function with signature:
+        heuristic(item_size, bin_loads, capacity)
+
+    dataset:
+        "train", "val", "test",
+        JSON filepath, or dataset dictionary.
+
+    Returns:
+        Dictionary of evaluation metrics.
+    """
+
+    dataset = resolve_dataset(dataset)
+
+    if not dataset:
+        raise ValueError("Dataset is empty")
 
     results = []
 
@@ -73,7 +145,6 @@ def evaluate(heuristic, dataset):
         )
         results.append(result)
 
-    #group results by distribution family
     grouped = defaultdict(list)
 
     for result in results:
@@ -83,68 +154,39 @@ def evaluate(heuristic, dataset):
 
     for family, family_results in grouped.items():
 
-        if any(not r["feasible"] for r in family_results):
+        if any(
+            not r["feasible"]
+            for r in family_results
+        ):
             family_scores[family] = float("inf")
+
         else:
             family_scores[family] = statistics.mean(
-                r["score"] for r in family_results
+                r["score"]
+                for r in family_results
             )
 
-    feasible = all(r["feasible"] for r in results)
+    feasible = all(
+        r["feasible"] for r in results
+    )
 
-    # Equal weight to each distribution family
     overall_score = (
         statistics.mean(family_scores.values())
-        if feasible and family_scores
-        else float("inf")
+        if feasible else float("inf")
     )
 
     return {
         "feasible": feasible,
         "score": overall_score,
         "mean_bins": (
-            statistics.mean(r["bins_used"] for r in results)
-            if feasible and results else None
+            statistics.mean(
+                r["bins_used"] for r in results
+            )
+            if feasible else None
         ),
-        "total_runtime": sum(r["runtime"] for r in results),
+        "total_runtime": sum(
+            r["runtime"] for r in results
+        ),
         "family_scores": family_scores,
         "results": results
     }
-
-#run baseline eval
-if __name__ == "__main__":
-
-    train = load_instances("..\data\train.json")
-    validation = load_instances("..\data\val\.json")
-    test = load_instances("..\data\test.json")
-
-    heuristics = {
-        "First Fit": first_fit,
-        "Best Fit": best_fit
-    }
-
-    for name, heuristic in heuristics.items():
-
-        print(f"\n========== {name} ==========")
-
-        for split_name, dataset in [
-            ("Train", train),
-            ("Validation", validation),
-            ("Test", test)
-        ]:
-
-            result = evaluate(heuristic, dataset)
-
-            print(f"\n{split_name}")
-            print(f"Feasible: {result['feasible']}")
-            print(f"Score: {result['score']:.4f}")
-            print(f"Mean bins: {result['mean_bins']}")
-            print(
-                f"Total runtime: "
-                f"{result['total_runtime']:.6f}s"
-            )
-
-            print("Distribution scores:")
-
-            for family, score in result["family_scores"].items():
-                print(f"  {family}: {score:.4f}")
