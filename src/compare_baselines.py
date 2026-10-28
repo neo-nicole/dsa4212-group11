@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 import pandas as pd
-from baselines import simulate, first_fit, best_fit, make_ab_first_fit
+from src.baselines import simulate, first_fit, best_fit, make_ab_first_fit
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / 'data' / 'final_data'
