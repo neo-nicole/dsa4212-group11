@@ -67,18 +67,18 @@ def add_family(store, prefix, family, n_instances, base_seed, sampler):
 def generate_datasets():
     datasets = {"train": {}, "val": {}, "test": {}}
 
-    # Training set : 20 instances each
+    # Training set : 30 instances each
     tr = datasets["train"]
     train_instances = 30
     add_family(tr, "train_unif_200",  "uniform_200",    train_instances, 33,  lambda r: uniform(r, 200))
-    add_family(tr, "train_small_200", "small_1_30_200", train_instances, 133, lambda r: uniform(r, 200, 1, 30))
+    #add_family(tr, "train_small_200", "small_1_30_200", train_instances, 133, lambda r: uniform(r, 200, 1, 30))
     add_family(tr, "train_unif_500",  "uniform_500",    train_instances, 233, lambda r: uniform(r, 500))
 
-    # Validation set: same distributions as training, but 10 instances each
+    # Validation set: same distributions as training, but 15 instances each
     va = datasets["val"]
     validation_instances = 15
     add_family(va, "val_unif_200",  "uniform_200",    validation_instances, 1033, lambda r: uniform(r, 200))
-    add_family(va, "val_small_200", "small_1_30_200", validation_instances, 1133, lambda r: uniform(r, 200, 1, 30))
+    #add_family(va, "val_small_200", "small_1_30_200", validation_instances, 1133, lambda r: uniform(r, 200, 1, 30))
     add_family(va, "val_unif_500",  "uniform_500",    validation_instances, 1233, lambda r: uniform(r, 500))
 
     # Test set: 20 instances each
@@ -108,7 +108,7 @@ def load_dataset(name, folder=DATA_DIR):
 
 def by_family(split):
     """Group a split ({name: instance}) into {family: [instances]}.
-    e.g. by_family(load_dataset("train")) -> {"uniform_200": [...], "small_1_30_200": [...], ...}
+    e.g. by_family(load_dataset("train")) -> {"uniform_200": [...], "uniform_500": [...], ...}
     """
     groups = defaultdict(list)
     for inst in split.values():
