@@ -70,7 +70,7 @@ def make_ab_first_fit(a, b):
     ab_first_fit.params = (a, b)
     return ab_first_fit
 
-def load_tuned_ab_first_fit(path="outputs/ab_params.json"):
+def load_tuned_ab_first_fit(path="outputs/final_data/ab_params.json"):
     """Build the ab-ff from best params (a, b) found through tuning."""
     if not os.path.exists(path):
         raise FileNotFoundError(f"{path} not found")
@@ -150,7 +150,7 @@ if __name__ == "__main__":
     test_ab_first_fit()
     
     root = Path(__file__).resolve().parent.parent
-    with open(root / "outputs" / "ab_params.json") as f:
+    with open(root / "outputs" / "final_data" / "ab_params.json") as f:
         params = json.load(f)
 
     a, b = params["a"], params["b"]

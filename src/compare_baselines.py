@@ -4,10 +4,10 @@ import pandas as pd
 from baselines import simulate, first_fit, best_fit, make_ab_first_fit
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / 'data'
-OUTPUT_DIR = ROOT / 'outputs'
+DATA_DIR = ROOT / 'data' / 'final_data'
+OUTPUT_DIR = ROOT / 'outputs' / 'final_data'
 SPLITS = ('train', 'val', 'test')
-AB_A, AB_B = 20, 23
+AB_A, AB_B = 17, 20
 
 
 def compare_baselines(dataset):

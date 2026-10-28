@@ -13,7 +13,8 @@ from pathlib import Path
 
 #config
 ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / "data"
+DATA_DIR = ROOT / "data" / "final_data"
+OUTPUT_DIR = ROOT / 'outputs' / 'final_data'
 
 SPLITS = {
     "train": DATA_DIR / "train.json",
@@ -120,7 +121,7 @@ def evaluate(heuristic, dataset="train"):
 
     heuristic:
         Function with signature:
-        heuristic(item_size, bin_loads, capacity)
+        heuristic(item_size, remaining, capacity)
 
     dataset:
         "train", "val", "test",
