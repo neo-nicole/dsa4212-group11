@@ -1,15 +1,11 @@
 import json
-import time
 import math
 import statistics
+import time
 from collections import defaultdict
-from src.baselines import simulate, first_fit, best_fit, make_ab_first_fit
-
-def load_instances(filepath):
-    with open(filepath, "r") as f:
-        return json.load(f)
-
 from pathlib import Path
+
+from src.baselines import best_fit, first_fit, make_ab_first_fit, simulate
 
 #config
 ROOT = Path(__file__).resolve().parent.parent
@@ -19,7 +15,6 @@ OUTPUT_DIR = ROOT / 'outputs' / 'final_data'
 SPLITS = {
     "train": DATA_DIR / "train.json",
     "val": DATA_DIR / "val.json",
-    "validation": DATA_DIR / "val.json",
     "test": DATA_DIR / "test.json"
 }
 
@@ -96,16 +91,17 @@ def evaluate_instance(heuristic, instance_id, instance):
 
     if feasible:
         score = (
-            bins_used / lower_bound
-            if lower_bound > 0 else 1.0
+            100 * (bins_used - lower_bound) / lower_bound
+            if lower_bound > 0 else 0.0
         )
     else:
-        score = float("inf")
+        score = None
 
     return {
         "instance_id": instance_id,
         "family": family,
         "num_items": len(items),
+        "status": "ok" if feasible else "invalid",
         "feasible": feasible,
         "bins_used": bins_used,
         "lower_bound": lower_bound,
@@ -159,7 +155,7 @@ def evaluate(heuristic, dataset="train"):
             not r["feasible"]
             for r in family_results
         ):
-            family_scores[family] = float("inf")
+            family_scores[family] = None
 
         else:
             family_scores[family] = statistics.mean(
@@ -173,10 +169,11 @@ def evaluate(heuristic, dataset="train"):
 
     overall_score = (
         statistics.mean(family_scores.values())
-        if feasible else float("inf")
+        if feasible else None
     )
 
     return {
+        "status": "ok" if feasible else "invalid",
         "feasible": feasible,
         "score": overall_score,
         "mean_bins": (
