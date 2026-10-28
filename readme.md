@@ -104,3 +104,108 @@ print("Family scores:", result["family_scores"])
 - Do not use test results to tune or select heuristics.
 - The evaluator assumes `simulate()` enforces bin capacity and validates heuristic decisions.
 - LLM-generated code should be executed in an isolated process with a timeout before being used in automated experiments.
+
+## Using the Candidate Sandbox
+
+The `src/sandbox.py` module safely evaluates LLM-generated bin-packing
+heuristics. It runs each candidate in
+a separate Python process, validates the candidate, applies a timeout, and
+returns structured JSON results.
+
+### Candidate function format
+
+Candidates evaluated by the sandbox must define exactly one function named
+`scoring_fn`:
+
+```python
+def scoring_fn(item, remaining, capacity):
+    gap = remaining - item
+    return np.append(-gap, -capacity - 1)
+```
+
+The function receives the current item, the remaining capacities of feasible
+existing bins, and the bin capacity. It must return one finite numeric score
+for every feasible existing bin, followed by one additional score for opening
+a new bin. The shared simulator in `src/baselines.py` chooses the action with
+the largest score.
+
+Note: Candidates should not import NumPy. The sandbox provides it as `np`.
+
+### How the sandbox works
+
+The evaluation flow is:
+
+```text
+candidate source
+    -> syntax and signature validation
+    -> isolated worker process
+    -> src.baselines.simulate(...)
+    -> src.evaluation.evaluate(...)
+    -> bins used, percentage excess, and aggregation
+    -> JSON result
+```
+
+The performance score is:
+
+```python
+100 * (bins_used - lower_bound) / lower_bound
+```
+
+Lower scores are better. A score of `0.0` means the candidate matched the
+theoretical lower bound. The result also includes mean bins, family scores,
+runtime, and per-instance results.
+
+The sandbox delegates simulation and metric calculation to
+`src.evaluation.evaluate`, which in turn uses the shared simulator in
+`src.baselines.py`. This keeps the scoring definition identical for baseline
+and generated candidates.
+
+The sandbox reports:
+
+- `ok`: the candidate ran successfully;
+- `invalid`: the candidate had invalid syntax, a wrong signature, an exception,
+  or invalid output;
+- `timeout`: the candidate exceeded the configured time limit.
+
+### Run a candidate file
+
+For a candidate file in the repository root, such as `candidate.py`, run:
+
+```powershell
+python -m src.sandbox --candidate candidate.py --split train --timeout 10
+```
+
+If the candidate file is stored in `src`, use:
+
+```powershell
+python -m src.sandbox --candidate src\candidate.py --split train --timeout 10
+```
+
+Can select `train`, `val`, or `test` with `--split`.
+
+### Call the sandbox from Python
+
+If needed, an evolution loop can pass generated source code directly without creating a
+candidate file:
+
+```python
+from src.sandbox import run_candidate
+from src.generate_instances import load_dataset
+
+candidate_source = """
+def scoring_fn(item, remaining, capacity):
+    gap = remaining - item
+    return np.append(-gap, -capacity - 1)
+"""
+
+result = run_candidate(
+    candidate_source,
+    load_dataset("train"),
+    timeout=10,
+)
+
+print(result["status"])
+print(result["score"])
+```
+
+Invalid candidates should be rejected. For example, a candidate that returns a scalar instead of the required score array should produce `status: "invalid"`. A candidate that never returns should produce `status: "timeout"` when run with a sufficiently short timeout.
