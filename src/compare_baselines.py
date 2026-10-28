@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / 'data' / 'final_data'
 OUTPUT_DIR = ROOT / 'outputs' / 'final_data'
 SPLITS = ('train', 'val', 'test')
-AB_A, AB_B = 17, 20
+AB_A, AB_B = 11, 35
 
 
 def compare_baselines(dataset):

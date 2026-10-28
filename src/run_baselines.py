@@ -9,7 +9,7 @@ from baselines import (
 heuristics = {
     "First Fit": first_fit,
     "Best Fit": best_fit,
-    "ab-FirstFit": make_ab_first_fit(17, 20)
+    "ab-FirstFit": make_ab_first_fit(11, 35)
 }
 
 for name, heuristic in heuristics.items():
