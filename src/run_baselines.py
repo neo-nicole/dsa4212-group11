@@ -1,4 +1,4 @@
-#testing the evaluator too
+# testing the evaluator
 from src.evaluation import evaluate
 from src.baselines import (
     first_fit,
@@ -21,10 +21,17 @@ for name, heuristic in heuristics.items():
         result = evaluate(heuristic, split)
 
         print(f"\n{split.upper()}")
-        print(f"Score: {result['score']:.4f}")
+        score = result["score"]
+        if score is None:
+            print("Score: invalid")
+        else:
+            print(f"Score: {score:.4f}")
         print(f"Feasible: {result['feasible']}")
         print(f"Mean bins: {result['mean_bins']}")
         print(f"Runtime: {result['total_runtime']:.6f}s")
 
         for family, score in result["family_scores"].items():
-            print(f"  {family}: {score:.4f}")
+            if score is None:
+                print(f"  {family}: invalid")
+            else:
+                print(f"  {family}: {score:.4f}") # pct excess
