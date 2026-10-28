@@ -15,11 +15,11 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from generate_instances import load_dataset, by_family
+from src.generate_instances import load_dataset, by_family
 from src.baselines import simulate, first_fit, best_fit, make_ab_first_fit
 
 A_MAX, B_MAX = 30, 45 # selected arbitrarily, widen search if needed
-OUT_DIR = "outputs"
+OUT_DIR = "outputs/final_data/"
 
 def excess_bin_pct(inst, heuristic):
     """
