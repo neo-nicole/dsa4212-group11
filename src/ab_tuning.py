@@ -2,14 +2,14 @@
 Tune ab-First-Fit parameters (a, b) on train split
 
 Run from the project root:
-    python ab_tuning.py
+    python -m src.ab_tuning
 
 Outputs:
     outputs/ab_params.json
     outputs/ab_grid.png
 """
 import json
-import os
+from pathlib import Path
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -19,7 +19,8 @@ from src.generate_instances import load_dataset, by_family
 from src.baselines import simulate, first_fit, best_fit, make_ab_first_fit
 
 A_MAX, B_MAX = 30, 45 # selected arbitrarily, widen search if needed
-OUT_DIR = "outputs/final_data/"
+ROOT = Path(__file__).resolve().parent.parent
+OUT_DIR = ROOT / "outputs" / "final_data"
 
 def excess_bin_pct(inst, heuristic):
     """
@@ -46,7 +47,7 @@ def paired_diff(groups, h1, h2, n_boot=2000, seed=0):
     return d.mean(), np.percentile(boots, [2.5, 97.5])
 
 def main():
-    os.makedirs(OUT_DIR, exist_ok=True)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # load the train split, grouped by family
     train = by_family(load_dataset("train"))
@@ -82,7 +83,7 @@ def main():
     print(f"val: ab = {v_ab:.3f}%   first fit = {v_ff:.3f}%   best fit = {v_bf:.3f}%")
 
     # save params
-    with open(os.path.join(OUT_DIR, "ab_params.json"), "w") as f:
+    with (OUT_DIR / "ab_params.json").open("w", encoding="utf-8") as f:
         json.dump({"a": a_best, "b": b_best, "tuned_on": "train"}, f, indent=2)
 
     #plot heatmaps - 1 per family + mean
@@ -96,7 +97,7 @@ def main():
         plt.colorbar(im, ax=ax, label="% excess over lower bound")
         ax.plot(b_best, a_best, "r*", ms=12)
     plt.tight_layout()
-    plt.savefig(os.path.join(OUT_DIR, "ab_grid.png"), dpi=150)
+    plt.savefig(OUT_DIR / "ab_grid.png", dpi=150)
 
 
 if __name__ == "__main__":
