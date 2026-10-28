@@ -90,10 +90,17 @@ def evaluate_instance(heuristic, instance_id, instance):
     lower_bound = math.ceil(sum(items) / capacity)
 
     if feasible:
-        score = (
-            100 * (bins_used - lower_bound) / lower_bound
-            if lower_bound > 0 else 0.0
-        )
+        if lower_bound < 0:
+            raise ValueError("lower_bound cannot be negative")
+
+        if lower_bound == 0:
+            if bins_used != 0:
+                raise ValueError(
+                    "An instance with zero lower bound must use zero bins"
+                )
+            score = 0.0
+        else:
+            score = 100 * (bins_used - lower_bound) / lower_bound
     else:
         score = None
 
