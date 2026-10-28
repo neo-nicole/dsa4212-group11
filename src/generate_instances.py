@@ -2,7 +2,7 @@
 Instance generator for 1D bin packing.
 
 Usage:
-    python generate_instances.py # creates /data/{train,val,test}.json
+    python generate_instances.py # creates ../data/{train,val,test}.json
 
 In other scripts:
     from generate_instances import load_dataset, by_family
@@ -20,7 +20,8 @@ from collections import defaultdict
 import numpy as np
 
 CAPACITY = 100 # fix bin capacity to 100
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")  # default output folder
+SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(os.path.dirname(SRC_DIR), "data", "final_data")
 SPLIT_FILES = {"train": "train.json", "val": "val.json", "test": "test.json"}
 
 
@@ -68,23 +69,26 @@ def generate_datasets():
 
     # Training set : 20 instances each
     tr = datasets["train"]
-    add_family(tr, "train_unif_200",  "uniform_200",    20, 33,  lambda r: uniform(r, 200))
-    add_family(tr, "train_small_200", "small_1_30_200", 20, 133, lambda r: uniform(r, 200, 1, 30))
-    add_family(tr, "train_unif_500",  "uniform_500",    20, 233, lambda r: uniform(r, 500))
+    train_instances = 30
+    add_family(tr, "train_unif_200",  "uniform_200",    train_instances, 33,  lambda r: uniform(r, 200))
+    add_family(tr, "train_small_200", "small_1_30_200", train_instances, 133, lambda r: uniform(r, 200, 1, 30))
+    add_family(tr, "train_unif_500",  "uniform_500",    train_instances, 233, lambda r: uniform(r, 500))
 
     # Validation set: same distributions as training, but 10 instances each
     va = datasets["val"]
-    add_family(va, "val_unif_200",  "uniform_200",    10, 1033, lambda r: uniform(r, 200))
-    add_family(va, "val_small_200", "small_1_30_200", 10, 1133, lambda r: uniform(r, 200, 1, 30))
-    add_family(va, "val_unif_500",  "uniform_500",    10, 1233, lambda r: uniform(r, 500))
+    validation_instances = 15
+    add_family(va, "val_unif_200",  "uniform_200",    validation_instances, 1033, lambda r: uniform(r, 200))
+    add_family(va, "val_small_200", "small_1_30_200", validation_instances, 1133, lambda r: uniform(r, 200, 1, 30))
+    add_family(va, "val_unif_500",  "uniform_500",    validation_instances, 1233, lambda r: uniform(r, 500))
 
     # Test set: 20 instances each
     te = datasets["test"]
-    add_family(te, "test_weibull_200",   "weibull_200",          20, 2033, lambda r: weibull(r, 200))
-    add_family(te, "test_large_200",     "large_50_100_200",     20, 2133, lambda r: uniform(r, 200, 50, 100))
-    add_family(te, "test_identical_200", "near_identical_40_45", 20, 2233, lambda r: uniform(r, 200, 40, 45))
-    add_family(te, "test_unif_100",      "uniform_100",          20, 2333, lambda r: uniform(r, 100))
-    add_family(te, "test_unif_1000",     "uniform_1000",         20, 2433, lambda r: uniform(r, 1000))
+    test_instances = 20
+    add_family(te, "test_weibull_200",   "weibull_200",          test_instances, 2033, lambda r: weibull(r, 200))
+    add_family(te, "test_large_200",     "large_50_100_200",     test_instances, 2133, lambda r: uniform(r, 200, 50, 100))
+    add_family(te, "test_identical_200", "near_identical_40_45", test_instances, 2233, lambda r: uniform(r, 200, 40, 45))
+    add_family(te, "test_unif_100",      "uniform_100",          test_instances, 2333, lambda r: uniform(r, 100))
+    add_family(te, "test_unif_1000",     "uniform_1000",         test_instances, 2433, lambda r: uniform(r, 1000))
 
     # for sorted, used same seed so that can ensure diff in performance is due to ordering, not underlying items
     add_family(te, "test_sorted_desc_200", "sorted_largest_first_200",  20, 2533, lambda r: sorted_desc(r, 200))
