@@ -6,14 +6,14 @@ from pathlib import Path
 # ============================================================
 # Bin-Packing Simulator
 # ============================================================
-def simulate(items, capacity, scoring_fn):
+def simulate(items, capacity, priority_fn):
     """Pack items in order and return the number of bins used."""
     remaining = [] #remaining space left in each bin
 
     for item in items:
         r = np.array(remaining, dtype=float)
         valid = np.nonzero(r >= item)[0] #bins with enough space for item
-        score = np.asarray(scoring_fn(item, r[valid], capacity), dtype=float) # 1 score for each bin the item fits in + score for opening new bin
+        score = np.asarray(priority_fn(item, r[valid], capacity), dtype=float) # 1 score for each bin the item fits in + score for opening new bin
         if score.shape != (len(valid) + 1,) or not np.all(np.isfinite(score)):
             raise ValueError("scores must be len(valid bins)+1 finite numbers")
         k = int(np.argmax(score)) 
@@ -114,10 +114,10 @@ def test_baselines():
 
     print("All tests passed!")
 
-def choose(scoring_fn, item_size, remaining, capacity):
+def choose(priority_fn, item_size, remaining, capacity):
     """Index of the bin picked from remaining (valid bins only), None if a new bin is opened."""
     remaining = np.array(remaining, dtype=float)
-    k = int(np.argmax(scoring_fn(item_size, remaining, capacity)))
+    k = int(np.argmax(priority_fn(item_size, remaining, capacity)))
     return None if k == len(remaining) else k
 
 def test_ab_first_fit():

@@ -117,10 +117,10 @@ instance.
 ### Candidate function format
 
 Candidates evaluated by the sandbox must define exactly one function named
-`scoring_fn`:
+`priority_fn`:
 
 ```python
-def scoring_fn(item, remaining, capacity):
+def priority_fn(item, remaining, capacity):
     gap = remaining - item
     return np.append(-gap, -capacity - 1)
 ```
@@ -201,7 +201,7 @@ from src.sandbox import run_candidate
 from src.generate_instances import load_dataset
 
 candidate_source = """
-def scoring_fn(item, remaining, capacity):
+def priority_fn(item, remaining, capacity):
     gap = remaining - item
     return np.append(-gap, -capacity - 1)
 """

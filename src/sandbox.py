@@ -2,7 +2,7 @@
 
 Candidates must define:
 
-    def scoring_fn(item, remaining, capacity):
+    def priority_fn(item, remaining, capacity):
         ...
 
 The function returns one finite numeric score for each feasible existing bin,
@@ -53,7 +53,7 @@ class CandidateError(ValueError):
 
 
 def _compile_candidate(source: str):
-    """Compile source containing exactly one scoring_fn definition."""
+    """Compile source containing exactly one priority_fn definition."""
     try:
         tree = ast.parse(source, filename="<candidate>", mode="exec")
     except SyntaxError as exc:
@@ -64,7 +64,7 @@ def _compile_candidate(source: str):
     functions = [
         node for node in tree.body
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and node.name == "scoring_fn"
+        and node.name == "priority_fn"
     ]
     allowed_nodes = [
         node for node in tree.body
@@ -76,11 +76,11 @@ def _compile_candidate(source: str):
     ]
     if len(functions) != 1 or len(allowed_nodes) != 1:
         raise CandidateError(
-            "candidate must contain exactly one scoring_fn function"
+            "candidate must contain exactly one priority_fn function"
         )
     function = functions[0]
     if isinstance(function, ast.AsyncFunctionDef):
-        raise CandidateError("scoring_fn must be a regular function")
+        raise CandidateError("priority_fn must be a regular function")
     args = function.args
     if (
         len(args.args) != 3
@@ -91,7 +91,7 @@ def _compile_candidate(source: str):
         or args.defaults
     ):
         raise CandidateError(
-            "scoring_fn must have exactly three arguments: "
+            "priority_fn must have exactly three arguments: "
             "(item, remaining, capacity)"
         )
     if any(isinstance(node, (ast.Import, ast.ImportFrom)) for node in ast.walk(tree)):
@@ -108,7 +108,7 @@ def _compile_candidate(source: str):
             exec(compiled, namespace)
     except Exception as exc:
         raise CandidateError(f"candidate could not be compiled: {exc}") from exc
-    return namespace["scoring_fn"]
+    return namespace["priority_fn"]
 
 
 def _evaluate(
@@ -121,13 +121,13 @@ def _evaluate(
     Dataset mode uses ``evaluate`` for one worker process. Per-instance mode
     uses ``evaluate_instance`` for a worker containing exactly one instance.
     """
-    scoring_fn = _compile_candidate(source)
+    priority_fn = _compile_candidate(source)
     if not per_instance:
-        return evaluate(scoring_fn, dataset)
+        return evaluate(priority_fn, dataset)
     if len(dataset) != 1:
         raise ValueError("per-instance worker requires exactly one instance")
     instance_id, instance = next(iter(dataset.items()))
-    result = evaluate_instance(scoring_fn, instance_id, instance)
+    result = evaluate_instance(priority_fn, instance_id, instance)
     return {"status": result["status"], "feasible": result["feasible"], "results": [result]}
 
 
@@ -360,7 +360,7 @@ def _load_dataset(split: str) -> dict[str, dict[str, Any]]:
 
 # demo to test sandbox
 DEMO_SOURCE = """\
-def scoring_fn(item, remaining, capacity):
+def priority_fn(item, remaining, capacity):
     gap = remaining - item
     return np.append(-gap, -capacity - 1)
 """
