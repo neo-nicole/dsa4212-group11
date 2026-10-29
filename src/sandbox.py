@@ -16,6 +16,7 @@ import ast
 import contextlib
 import io
 import json
+import math
 import statistics
 import subprocess
 import sys
@@ -80,9 +81,18 @@ def _compile_candidate(source: str):
     function = functions[0]
     if isinstance(function, ast.AsyncFunctionDef):
         raise CandidateError("scoring_fn must be a regular function")
-    if len(function.args.args) != 3:
+    args = function.args
+    if (
+        len(args.args) != 3
+        or args.posonlyargs
+        or args.vararg is not None
+        or args.kwarg is not None
+        or args.kwonlyargs
+        or args.defaults
+    ):
         raise CandidateError(
-            "scoring_fn must have signature (item, remaining, capacity)"
+            "scoring_fn must have exactly three arguments: "
+            "(item, remaining, capacity)"
         )
     if any(isinstance(node, (ast.Import, ast.ImportFrom)) for node in ast.walk(tree)):
         raise CandidateError(
@@ -122,8 +132,8 @@ def _evaluate(
 
 
 def _worker() -> None:
-    request = json.load(sys.stdin)
     try:
+        request = json.load(sys.stdin)
         response = _evaluate(
             request["source"],
             request["dataset"],
@@ -131,6 +141,11 @@ def _worker() -> None:
         )
     except (CandidateError, ValueError, KeyError) as exc:
         response = {"status": "invalid", "error": str(exc)}
+    except Exception as exc:
+        response = {
+            "status": "invalid",
+            "error": f"{type(exc).__name__}: {exc}",
+        }
     print(json.dumps(response, allow_nan=False))
 
 
@@ -223,8 +238,8 @@ def _run_candidate(
     dict[str, Any]
         The evaluation results.
     """
-    if timeout <= 0:
-        raise ValueError("timeout must be positive")
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError("timeout must be finite and positive")
     command = [sys.executable, "-m", "src.sandbox", WORKER_FLAG]
 
     def run_worker(
