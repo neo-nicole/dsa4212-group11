@@ -5,4 +5,3 @@ __pycache__/
 *.pyd
 .env
 .DS_Store
-outputs/llm_logs/
