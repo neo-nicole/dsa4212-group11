@@ -16,14 +16,16 @@ import ast
 import contextlib
 import io
 import json
+import statistics
 import subprocess
 import sys
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-from src.evaluation import evaluate
+from src.evaluation import evaluate, evaluate_instance
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data" / "final_data"
@@ -99,27 +101,114 @@ def _compile_candidate(source: str):
     return namespace["scoring_fn"]
 
 
-def _evaluate(source: str, dataset: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    """Compile a candidate and delegate metrics to the shared evaluator."""
+def _evaluate(
+    source: str,
+    dataset: dict[str, dict[str, Any]],
+    per_instance: bool = False,
+) -> dict[str, Any]:
+    """Compile a candidate and evaluate a dataset or one instance.
+
+    Dataset mode uses ``evaluate`` for one worker process. Per-instance mode
+    uses ``evaluate_instance`` for a worker containing exactly one instance.
+    """
     scoring_fn = _compile_candidate(source)
-    return evaluate(scoring_fn, dataset)
+    if not per_instance:
+        return evaluate(scoring_fn, dataset)
+    if len(dataset) != 1:
+        raise ValueError("per-instance worker requires exactly one instance")
+    instance_id, instance = next(iter(dataset.items()))
+    result = evaluate_instance(scoring_fn, instance_id, instance)
+    return {"status": result["status"], "feasible": result["feasible"], "results": [result]}
 
 
 def _worker() -> None:
     request = json.load(sys.stdin)
     try:
-        response = _evaluate(request["source"], request["dataset"])
+        response = _evaluate(
+            request["source"],
+            request["dataset"],
+            request.get("per_instance", False),
+        )
     except (CandidateError, ValueError, KeyError) as exc:
         response = {"status": "invalid", "error": str(exc)}
     print(json.dumps(response, allow_nan=False))
 
 
-def run_candidate(
+def _failure_result(
+    instance_id: str,
+    instance: dict[str, Any],
+    status: str,
+    error: str,
+) -> dict[str, Any]:
+    return {
+        "instance_id": instance_id,
+        "family": instance.get("family"),
+        "num_items": instance.get("num_items"),
+        "status": status,
+        "feasible": False,
+        "bins_used": None,
+        "lower_bound": None,
+        "score": None,
+        "runtime": None,
+        "error": error,
+    }
+
+
+def _aggregate_results(results: list[dict[str, Any]]) -> dict[str, Any]:
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for result in results:
+        grouped[result["family"]].append(result)
+
+    family_scores = {
+        family: (
+            statistics.mean(row["score"] for row in rows)
+            if all(row["feasible"] for row in rows)
+            else None
+        )
+        for family, rows in grouped.items()
+    }
+    feasible = all(row["feasible"] for row in results)
+    status = (
+        "ok"
+        if feasible
+        else "timeout"
+        if any(row["status"] == "timeout" for row in results)
+        else "invalid"
+    )
+    return {
+        "status": status,
+        "feasible": feasible,
+        "score": (
+            statistics.mean(family_scores.values())
+            if feasible else None
+        ),
+        "mean_bins": (
+            statistics.mean(row["bins_used"] for row in results)
+            if feasible else None
+        ),
+        "total_runtime": sum(
+            row["runtime"] for row in results
+            if row["runtime"] is not None
+        ),
+        "family_scores": family_scores,
+        "results": results,
+    }
+
+
+def _run_candidate(
     source: str,
     dataset: dict[str, dict[str, Any]],
     timeout: float = 10.0,
+    per_instance: bool = False,
 ) -> dict[str, Any]:
-    """Evaluate candidate source in a fresh process.
+    """Evaluate a candidate using the selected process isolation strategy.
+
+    By default, one process evaluates the complete dataset. When
+    ``per_instance`` is true, each instance gets a fresh process and its own
+    timeout.
+
+    This private helper is used by ``run_candidate`` and
+    ``run_candidate_per_instance``.
     Parameters
     ----------
     source : str
@@ -137,30 +226,114 @@ def run_candidate(
     if timeout <= 0:
         raise ValueError("timeout must be positive")
     command = [sys.executable, "-m", "src.sandbox", WORKER_FLAG]
-    try:
-        completed = subprocess.run(
-            command,
-            input=json.dumps({"source": source, "dataset": dataset}),
-            text=True,
-            capture_output=True,
-            cwd=ROOT,
-            timeout=timeout,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        return {
-            "status": "timeout",
-            "error": f"candidate exceeded {timeout:g}s",
-        }
-    if completed.returncode != 0:
-        return {
-            "status": "invalid",
-            "error": completed.stderr.strip() or "sandbox process failed",
-        }
-    try:
-        return json.loads(completed.stdout)
-    except json.JSONDecodeError:
-        return {"status": "invalid", "error": "malformed sandbox response"}
+
+    def run_worker(
+        worker_dataset: dict[str, dict[str, Any]],
+        worker_per_instance: bool,
+    ) -> dict[str, Any] | None:
+        try:
+            completed = subprocess.run(
+                command,
+                input=json.dumps({
+                    "source": source,
+                    "dataset": worker_dataset,
+                    "per_instance": worker_per_instance,
+                }),
+                text=True,
+                capture_output=True,
+                cwd=ROOT,
+                timeout=timeout,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return None
+
+        if completed.returncode != 0:
+            return {
+                "status": "invalid",
+                "error": completed.stderr.strip() or "sandbox process failed",
+            }
+
+        try:
+            response = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            return {"status": "invalid", "error": "malformed sandbox response"}
+        if not isinstance(response, dict):
+            return {"status": "invalid", "error": "malformed sandbox response"}
+        return response
+
+    if not per_instance:
+        response = run_worker(dataset, False)
+        if response is None:
+            return {
+                "status": "timeout",
+                "error": f"candidate exceeded {timeout:g}s",
+            }
+        return response
+
+    results = []
+    for instance_id, instance in dataset.items():
+        response = run_worker({instance_id: instance}, True)
+        if response is None:
+            results.append(
+                _failure_result(
+                    instance_id,
+                    instance,
+                    "timeout",
+                    f"candidate exceeded {timeout:g}s for {instance_id}",
+                )
+            )
+            continue
+        if response.get("status") == "invalid" and "results" not in response:
+            results.append(
+                _failure_result(
+                    instance_id,
+                    instance,
+                    "invalid",
+                    response.get("error", "sandbox process failed"),
+                )
+            )
+            continue
+        instance_results = response.get("results")
+        if not isinstance(instance_results, list) or len(instance_results) != 1:
+            results.append(
+                _failure_result(
+                    instance_id,
+                    instance,
+                    "invalid",
+                    response.get("error", "malformed instance result"),
+                )
+            )
+            continue
+        results.append(instance_results[0])
+
+    if not results:
+        raise ValueError("dataset must not be empty")
+    return _aggregate_results(results)
+
+
+def run_candidate(
+    source: str,
+    dataset: dict[str, dict[str, Any]],
+    timeout: float = 10.0,
+) -> dict[str, Any]:
+    """Evaluate a candidate against a dataset in one fresh process.
+
+    The timeout applies to the complete dataset evaluation.
+    """
+    return _run_candidate(source, dataset, timeout, per_instance=False)
+
+
+def run_candidate_per_instance(
+    source: str,
+    dataset: dict[str, dict[str, Any]],
+    timeout: float = 10.0,
+) -> dict[str, Any]:
+    """Evaluate each dataset instance in a fresh process.
+
+    The timeout applies independently to each complete bin-packing instance.
+    """
+    return _run_candidate(source, dataset, timeout, per_instance=True)
 
 
 def _load_dataset(split: str) -> dict[str, dict[str, Any]]:
@@ -185,6 +358,11 @@ def main() -> None:
     group.add_argument("--demo", action="store_true")
     parser.add_argument("--split", choices=sorted(SPLITS), default="train")
     parser.add_argument("--timeout", type=float, default=10.0)
+    parser.add_argument(
+        "--per-instance",
+        action="store_true",
+        help="use a fresh worker and timeout for each dataset instance",
+    )
     args = parser.parse_args()
 
     source = (
@@ -192,7 +370,8 @@ def main() -> None:
         if args.demo
         else args.candidate.read_text(encoding="utf-8")
     )
-    result = run_candidate(source, _load_dataset(args.split), args.timeout)
+    run = run_candidate_per_instance if args.per_instance else run_candidate
+    result = run(source, _load_dataset(args.split), args.timeout)
     print(json.dumps(result, indent=2, allow_nan=False))
     if result["status"] != "ok":
         raise SystemExit(2)

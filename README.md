@@ -108,9 +108,11 @@ print("Family scores:", result["family_scores"])
 ## Using the Candidate Sandbox
 
 The `src/sandbox.py` module safely evaluates LLM-generated bin-packing
-heuristics. It runs each candidate in
-a separate Python process, validates the candidate, applies a timeout, and
-returns structured JSON results.
+heuristics. It validates each candidate, runs it in a separate Python process,
+applies a timeout, and returns structured JSON results. The default
+`run_candidate` path uses one worker for the complete dataset. An optional
+per-instance path starts a fresh worker and timeout for each individual
+instance.
 
 ### Candidate function format
 
@@ -140,7 +142,7 @@ candidate source
     -> syntax and signature validation
     -> isolated worker process
     -> src.baselines.simulate(...)
-    -> src.evaluation.evaluate(...)
+    -> src.evaluation.evaluate(...) or evaluate_instance(...)
     -> bins used, percentage excess, and aggregation
     -> JSON result
 ```
@@ -156,9 +158,9 @@ theoretical lower bound. The result also includes mean bins, family scores,
 runtime, and per-instance results.
 
 The sandbox delegates simulation and metric calculation to
-`src.evaluation.evaluate`, which in turn uses the shared simulator in
-`src.baselines.py`. This keeps the scoring definition identical for baseline
-and generated candidates.
+`src.evaluation.py`, which uses the shared simulator in
+`src.baselines.py`. Whole-dataset mode calls `evaluate`; per-instance mode
+calls `evaluate_instance`, and the parent aggregates the individual results.
 
 The sandbox reports:
 
@@ -173,6 +175,12 @@ For a candidate file in the repository root, such as `candidate.py`, run:
 
 ```powershell
 python -m src.sandbox --candidate candidate.py --split train --timeout 10
+```
+
+For FunSearch-style per-instance isolation, add `--per-instance`:
+
+```powershell
+python -m src.sandbox --candidate candidate.py --split train --timeout 10 --per-instance
 ```
 
 If the candidate file is stored in `src`, use:
@@ -207,5 +215,22 @@ result = run_candidate(
 print(result["status"])
 print(result["score"])
 ```
+
+Use `run_candidate_per_instance` when each individual instance should have
+its own worker and timeout:
+
+```python
+from src.sandbox import run_candidate_per_instance
+
+result = run_candidate_per_instance(
+    candidate_source,
+    load_dataset("train"),
+    timeout=10,
+)
+```
+
+In `run_candidate`, the timeout covers the complete dataset evaluation. In
+`run_candidate_per_instance`, it applies independently to each complete
+bin-packing instance. Both functions return the same aggregate result shape.
 
 Invalid candidates should be rejected. For example, a candidate that returns a scalar instead of the required score array should produce `status: "invalid"`. A candidate that never returns should produce `status: "timeout"` when run with a sufficiently short timeout.
