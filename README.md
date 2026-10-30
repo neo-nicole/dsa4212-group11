@@ -234,3 +234,134 @@ In `run_candidate`, the timeout covers the complete dataset evaluation. In
 bin-packing instance. Both functions return the same aggregate result shape.
 
 Invalid candidates should be rejected. For example, a candidate that returns a scalar instead of the required score array should produce `status: "invalid"`. A candidate that never returns should produce `status: "timeout"` when run with a sufficiently short timeout.
+
+## Using the OpenRouter API Key and LLM Client
+
+The `src/llm_client.py` module sends prompts to the LLM through OpenRouter. It logs every call (tokens, cost, latency, prompt and response) and tracks spending against the key's budget.
+
+Method A, Method B and the pilot must all call the LLM through this module, so that every run uses the same model settings and is logged the same way.
+
+### 1. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+The client needs `requests` and `python-dotenv` (both listed in `requirements.txt`).
+
+### 2. Set up your API key
+
+Create a file named `.env` in the project root (the same folder as `README.md`) containing:
+
+```text
+OPENROUTER_API_KEY=sk-or-v1-...
+```
+
+- `.env` is listed in `.gitignore` and should not be commited. 
+
+### 3. Test the setup
+
+From the project root, run:
+
+```bash
+python -m src.llm_client
+```
+
+This should print:
+
+- the credit left on your key, before and after the call;
+- the reply (should be `hello`);
+- the token usage and cost of the call;
+- the totals for the `smoke_test` run, and the budget status.
+
+### 4. Fixed settings
+
+These settings are defined at the top of `src/llm_client.py` and must stay consistent for Method A and Method B:
+
+| Setting | Value | Reason |
+|---|---|---|
+| `MODEL` | `google/gemini-3.6-flash-20260721` | Dated version, so the model cannot change mid-project |
+| `TEMPERATURE` | `1.0` | Method A relies on sampling for diversity |
+| `MAX_TOKENS` | `2000` | Caps output length; to be adjusted after the pilot |
+| Reasoning effort | `low` | Thinking tokens are billed as output and count toward the token budget |
+| `BUDGET_USD` | `15.0` | The key's spending limit, used by the budget safety net |
+| `WARN_AT` | `0.8` | Print a warning once 80% of `BUDGET_USD` is spent |
+
+### 5. Make a single call
+
+```python
+from src.llm_client import call_llm
+
+out = call_llm(
+    "Write hello world in Python",
+    run_id="debug_hello",
+    method="test",
+)
+
+print(out["text"])          # the LLM's reply
+print(out["total_tokens"])  # prompt + completion tokens
+print(out["cost"])          # USD
+```
+
+`call_llm` retries failed requests up to 3 times. If every retry fails, `out["text"]` is `None` and `out["error"]` contains the last error.
+
+### 6. Use the client in an experiment loop
+
+Each run stops when it reaches its token budget `T`, which is the same for Method A and Method B. `check_budget()` is only a safety net on the key's total dollar spend. It prints a warning but does not stop the run, so the loop must check it:
+
+```python
+from src.llm_client import call_llm, check_budget, run_totals
+
+tokens_used = 0
+while tokens_used < TOKEN_BUDGET:              # experiment budget T
+    if check_budget()["left"] <= 0.5:          # stop early
+        print("Key budget almost used up - stopping run")
+        break
+    out = call_llm(prompt, run_id=run_id, method="A", generation=gen)
+    tokens_used += out["total_tokens"] or 0
+    # extract code -> sandbox -> fitness
+
+print(run_totals(run_id))                      # calls, tokens, cost, latency for this run
+```
+
+### 7. What is logged
+
+Every call appends one JSON line to `outputs/llm_logs/<run_id>.jsonl`, including failed calls:
+
+| Field | Description |
+|---|---|
+| `time` | When the call finished |
+| `run_id` | Run the call belongs to (also the log file name) |
+| `method` | `"A"`, `"B"` or `"test"` |
+| `generation` | Method B round number; `None` for Method A and tests |
+| `model`, `temperature` | Settings used for the call |
+| `prompt_tokens` | Input tokens sent |
+| `completion_tokens` | Output tokens (includes `reasoning_tokens`) |
+| `reasoning_tokens` | Hidden thinking tokens, a subset of `completion_tokens` (`None` if not reported) |
+| `total_tokens` | `prompt_tokens + completion_tokens`; counts toward the token budget |
+| `cost` | USD for the call (`None` if unknown) |
+| `latency_s` | Seconds from first attempt to finish, including retries |
+| `attempts` | Number of tries (`>1` means the call was retried) |
+| `error` | Last error message if every retry failed, else `None` |
+| `prompt`, `response` | Full prompt sent and full reply received |
+
+`run_totals(run_id)` sums the calls, tokens, cost and latency in a run's log.
+
+**Run naming:**
+
+- Pilot and reported runs: e.g. `pilot_A`, `pilot_B`, `runA_1`, `runB_2`. 
+
+### 8. Budget and credit
+
+| Function | Returns |
+|---|---|
+| `credit_remaining()` | Dollars left on the key |
+| `check_budget()` | Total spent on the key vs `BUDGET_USD`, as a dict with `spent`, `budget`, `left`, `fraction_used` |
+| `run_totals(run_id)` | Calls, tokens, cost and latency for one run, plus the share of the budget it used |
+
+### 9. Important notes
+
+- All LLM calls for experiments must go through `call_llm`, so that every call is logged.
+- Use `total_tokens` (not only `completion_tokens`) for the token budget: Method B's extra cost comes mostly from longer prompts.
+- Do not commit a log file while its run is still writing to it.
+- The API key is sent only in request headers and is never written to the logs.
