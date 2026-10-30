@@ -267,7 +267,7 @@ From the project root, run:
 python -m src.llm_client
 ```
 
-This should prints:
+This should print:
 
 - the credit left on your key, before and after the call;
 - the reply (should be `hello`);
@@ -314,7 +314,7 @@ from src.llm_client import call_llm, check_budget, run_totals
 
 tokens_used = 0
 while tokens_used < TOKEN_BUDGET:              # experiment budget T
-    if check_budget()["left"] <= 0.5:          # stop slightly early: spend can lag
+    if check_budget()["left"] <= 0.5:          # stop early
         print("Key budget almost used up - stopping run")
         break
     out = call_llm(prompt, run_id=run_id, method="A", generation=gen)
@@ -333,7 +333,7 @@ Every call appends one JSON line to `outputs/llm_logs/<run_id>.jsonl`, including
 | `time` | When the call finished |
 | `run_id` | Run the call belongs to (also the log file name) |
 | `method` | `"A"`, `"B"` or `"test"` |
-| `generation` | Method B round number (`0` = seed population); `None` for Method A and tests |
+| `generation` | Method B round number; `None` for Method A and tests |
 | `model`, `temperature` | Settings used for the call |
 | `prompt_tokens` | Input tokens sent |
 | `completion_tokens` | Output tokens (includes `reasoning_tokens`) |
