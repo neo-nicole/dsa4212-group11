@@ -46,7 +46,8 @@ URL = "https://openrouter.ai/api/v1/chat/completions"
 LOG_DIR = ROOT / "outputs" / "llm_logs"
 
 # ---- fixed across Method A and Method B ----
-MODEL = "google/gemini-3.6-flash-20260721" # use dated version 
+MODEL = "google/gemini-3.8-flash"
+PRICE_MODEL = "google/gemini-3.8-flash"
 TEMPERATURE = 1.0
 MAX_TOKENS = 2000 # adjust after the pilot
 
@@ -97,15 +98,22 @@ def _price(model):
 
 def _cost(usage, model):
     """Dollar cost of one call: OpenRouter's reported cost, else tokens x listed price."""
+
     if usage.get("cost") is not None:
         return usage["cost"]
+
     if usage.get("prompt_tokens") is None:
-        return None # call failed, nothing billed
+        return None  # call failed, nothing billed
+
     try:
-        p_in, p_out = _price(model)
-    except (requests.RequestException, KeyError, ValueError): # pricing lookup failed - leave cost unknown
-        return None
-    return usage["prompt_tokens"] * p_in + usage.get("completion_tokens", 0) * p_out
+        p_in, p_out = _price(PRICE_MODEL)
+    except (requests.RequestException, KeyError, ValueError):
+        return None  # pricing lookup failed - leave cost unknown
+
+    return (
+        usage["prompt_tokens"] * p_in
+        + usage.get("completion_tokens", 0) * p_out
+    )
 
 
 def run_totals(run_id):
@@ -215,11 +223,12 @@ def call_llm(prompt, run_id, method, generation=None, model=MODEL, retries=3):
 
 
 if __name__ == "__main__":
-    # Smoke test: python -m src.llm_client
-    print("Credit left: $", credit_remaining())
-    out = call_llm("Reply with exactly: hello", run_id="smoke_test", method="test")
-    print("Reply:", out["text"])
-    print("Usage:", out["usage"])
-    print("Total tokens:", out["total_tokens"], "| Cost: $", out["cost"])
-    print("Run totals:", run_totals("smoke_test"))
-    print("Budget:", check_budget())
+    print("Checking OpenRouter budget information...")
+
+    remaining = credit_remaining()
+    input_price, output_price = _price(PRICE_MODEL)
+
+    print(f"Remaining account credit: ${remaining}")
+    print(f"Model: {MODEL}")
+    print(f"Input price per token: ${input_price}")
+    print(f"Output price per token: ${output_price}")
