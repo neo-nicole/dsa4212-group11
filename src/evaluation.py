@@ -17,7 +17,8 @@ OUTPUT_DIR = ROOT / 'outputs' / 'final_data'
 SPLITS = {
     "train": DATA_DIR / "train.json",
     "val": DATA_DIR / "val.json",
-    "test": DATA_DIR / "test.json"
+    "in-test": DATA_DIR / "in-test.json",
+    "out-test": DATA_DIR / "out-test.json",
 }
 
 #load datasets
@@ -29,7 +30,7 @@ def load_instances(filepath):
 def resolve_dataset(dataset):
     """
     Accept:
-    1. Split name: "train", "val", "test"
+    1. Split name: "train", "val", "in-test", or "out-test"
     2. JSON filepath: "data/train.json"
     3. Already-loaded dataset dictionary
     """
@@ -38,8 +39,9 @@ def resolve_dataset(dataset):
         return dataset
 
     if isinstance(dataset, (str, Path)):
-        if str(dataset).lower() in SPLITS:
-            return load_dataset(str(dataset).lower())
+        split = str(dataset).lower()
+        if split in SPLITS:
+            return load_dataset(split)
 
         return load_instances(dataset)
 
@@ -127,7 +129,7 @@ def evaluate(heuristic, dataset="train"):
         heuristic(item_size, remaining, capacity)
 
     dataset:
-        "train", "val", "test",
+        "train", "val", "in-test", "out-test",
         JSON filepath, or dataset dictionary.
 
     Returns:

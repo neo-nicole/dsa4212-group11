@@ -48,7 +48,8 @@ Specify the dataset using:
 ```python
 evaluate(my_heuristic, "train")  # Training set
 evaluate(my_heuristic, "val")    # Validation set
-evaluate(my_heuristic, "test")   # Test set
+evaluate(my_heuristic, "in-test")  # In-distribution test set
+evaluate(my_heuristic, "out-test") # Out-of-distribution test set
 ```
 
 You can also pass a JSON file path or an already-loaded dataset dictionary.
@@ -56,7 +57,8 @@ You can also pass a JSON file path or an already-loaded dataset dictionary.
 **Dataset usage:**
 - **Train:** Score candidates during LLM generation/evolution.
 - **Validation:** Select the best candidate.
-- **Test:** Final generalisation evaluation only. Do not use for tuning.
+- **In-test:** Final evaluation on the same distributions as training.
+- **Out-test:** Final generalisation evaluation on unseen distributions only. Do not use for tuning.
 
 ### 4. Evaluation output
 
@@ -191,7 +193,7 @@ If the candidate file is stored in `src`, use:
 python -m src.sandbox --candidate src\candidate.py --split train --timeout 10
 ```
 
-Can select `train`, `val`, or `test` with `--split`.
+Can select `train`, `val`, `in-test`, or `out-test` with `--split`.
 
 ### Call the sandbox from Python
 
