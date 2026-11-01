@@ -1,7 +1,8 @@
 from pathlib import Path
 import pandas as pd
-from src.baselines import simulate, first_fit, best_fit, make_ab_first_fit
+from src.baselines import first_fit, best_fit, make_ab_first_fit
 from src.generate_instances import load_dataset
+from src.simulator import simulate
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = ROOT / 'outputs' / 'final_data'

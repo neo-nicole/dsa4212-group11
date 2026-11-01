@@ -5,8 +5,9 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-from src.baselines import best_fit, first_fit, make_ab_first_fit, simulate
+from src.baselines import best_fit, first_fit, make_ab_first_fit
 from src.generate_instances import load_dataset
+from src.simulator import simulate
 
 #config
 ROOT = Path(__file__).resolve().parent.parent
