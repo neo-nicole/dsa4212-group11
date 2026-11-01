@@ -6,6 +6,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from src.baselines import best_fit, first_fit, make_ab_first_fit, simulate
+from src.generate_instances import load_dataset
 
 #config
 ROOT = Path(__file__).resolve().parent.parent
@@ -37,9 +38,7 @@ def resolve_dataset(dataset):
 
     if isinstance(dataset, (str, Path)):
         if str(dataset).lower() in SPLITS:
-            return load_instances(
-                SPLITS[str(dataset).lower()]
-            )
+            return load_dataset(str(dataset).lower())
 
         return load_instances(dataset)
 

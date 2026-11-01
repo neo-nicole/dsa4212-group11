@@ -8,11 +8,11 @@ from src.run_pilot import (
     make_summary,
     run_method_b,
 )
-from src.sandbox import _load_dataset
+from src.generate_instances import load_dataset
 
 
 def main():
-    train_data = _load_dataset("train")
+    train_data = load_dataset("train")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_id = f"pilot_B_{timestamp}"

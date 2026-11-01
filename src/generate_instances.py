@@ -102,7 +102,7 @@ def load_dataset(name, folder=DATA_DIR):
     """ Load train/val/test datasets.
     name is 'train', 'val', or 'test'.
     """
-    with open(os.path.join(folder, f"{name}.json")) as f:
+    with open(os.path.join(folder, f"{name}.json"), encoding="utf-8") as f:
         return json.load(f)
 
 

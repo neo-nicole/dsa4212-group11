@@ -27,9 +27,9 @@ from typing import Any
 import numpy as np
 
 from src.evaluation import evaluate, evaluate_instance
+from src.generate_instances import load_dataset
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / "data" / "final_data"
 SPLITS = {"train", "val", "test"}
 WORKER_FLAG = "--sandbox-worker"
 
@@ -351,13 +351,6 @@ def run_candidate_per_instance(
     return _run_candidate(source, dataset, timeout, per_instance=True)
 
 
-def _load_dataset(split: str) -> dict[str, dict[str, Any]]:
-    if split not in SPLITS:
-        raise ValueError(f"split must be one of {sorted(SPLITS)}")
-    with (DATA_DIR / f"{split}.json").open(encoding="utf-8") as handle:
-        return json.load(handle)
-
-
 # demo to test sandbox
 DEMO_SOURCE = """\
 def priority_fn(item, remaining, capacity):
@@ -386,7 +379,7 @@ def main() -> None:
         else args.candidate.read_text(encoding="utf-8")
     )
     run = run_candidate_per_instance if args.per_instance else run_candidate
-    result = run(source, _load_dataset(args.split), args.timeout)
+    result = run(source, load_dataset(args.split), args.timeout)
     print(json.dumps(result, indent=2, allow_nan=False))
     if result["status"] != "ok":
         raise SystemExit(2)

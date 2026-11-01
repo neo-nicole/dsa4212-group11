@@ -1,10 +1,9 @@
-import json
 from pathlib import Path
 import pandas as pd
 from src.baselines import simulate, first_fit, best_fit, make_ab_first_fit
+from src.generate_instances import load_dataset
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / 'data' / 'final_data'
 OUTPUT_DIR = ROOT / 'outputs' / 'final_data'
 SPLITS = ('train', 'val', 'test')
 AB_A, AB_B = 11, 35
@@ -64,8 +63,7 @@ def analyse_baselines(df):
 def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     for split in SPLITS:
-        with (DATA_DIR / f'{split}.json').open('r', encoding='utf-8') as f:
-            dataset = json.load(f)
+        dataset = load_dataset(split)
         comparison = compare_baselines(dataset)
         summary = analyse_baselines(comparison)
         comparison.to_csv(OUTPUT_DIR / f'baseline_comparison_{split}.csv', index=False)
