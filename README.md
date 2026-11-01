@@ -345,7 +345,7 @@ Every call appends one JSON line to `outputs/llm_logs/<run_id>.jsonl`, including
 | `error` | Last error message if every retry failed, else `None` |
 | `prompt`, `response` | Full prompt sent and full reply received |
 
-`run_totals(run_id)` sums the calls, tokens, cost and latency in a run's log.
+`run_totals(run_id)` summarises calls, token usage, cost, latency, retried calls and the fraction of the configured budget used for a run.
 
 **Run naming:**
 
