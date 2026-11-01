@@ -116,6 +116,8 @@ instance.
 
 ### Candidate function format
 
+The project supports two heuristic interfaces. The standard evaluation interface is used by baseline heuristics and selects a bin directly. LLM-generated candidates use a separate `priority_fn` interface, which assigns priority scores to feasible bins and the option of opening a new bin. The sandbox converts these scores into bin-placement decisions during evaluation.
+
 Candidates evaluated by the sandbox must define exactly one function named
 `priority_fn`:
 
@@ -267,12 +269,9 @@ From the project root, run:
 python -m src.llm_client
 ```
 
-This should print:
+This checks the OpenRouter configuration and displays the configured model and available budget information.
 
-- the credit left on your key, before and after the call;
-- the reply (should be `hello`);
-- the token usage and cost of the call;
-- the totals for the `smoke_test` run, and the budget status.
+A separate smoke test can be performed using `call_llm()` to verify that an actual API request succeeds. Smoke-test calls are logged and incur API costs.
 
 ### 4. Fixed settings
 
@@ -280,7 +279,7 @@ These settings are defined at the top of `src/llm_client.py` and must stay consi
 
 | Setting | Value | Reason |
 |---|---|---|
-| `MODEL` | `google/gemini-3.6-flash-20260721` | Dated version, so the model cannot change mid-project |
+| `MODEL` | `google/gemini-3.8-flash` | LLM used for candidate generation |
 | `TEMPERATURE` | `1.0` | Method A relies on sampling for diversity |
 | `MAX_TOKENS` | `2000` | Caps output length; to be adjusted after the pilot |
 | Reasoning effort | `low` | Thinking tokens are billed as output and count toward the token budget |
@@ -307,22 +306,23 @@ print(out["cost"])          # USD
 
 ### 6. Use the client in an experiment loop
 
-Each run stops when it reaches its token budget `T`, which is the same for Method A and Method B. `check_budget()` is only a safety net on the key's total dollar spend. It prints a warning but does not stop the run, so the loop must check it:
+The experiment runners use `call_llm()` to send requests and record token usage, cost and latency.
+
+The completed experiment used 50 candidate generations for each method. BUDGET_USD provides a spending safeguard, while the experiment runners control the number of candidate generations.
+
+Method A makes independent sampling calls. Method B uses the previous valid candidate and evolutionary feedback when generating subsequent candidates.
+
+To run the experiment from the project root:
 
 ```python
-from src.llm_client import call_llm, check_budget, run_totals
-
-tokens_used = 0
-while tokens_used < TOKEN_BUDGET:              # experiment budget T
-    if check_budget()["left"] <= 0.5:          # stop early
-        print("Key budget almost used up - stopping run")
-        break
-    out = call_llm(prompt, run_id=run_id, method="A", generation=gen)
-    tokens_used += out["total_tokens"] or 0
-    # extract code -> sandbox -> fitness
-
-print(run_totals(run_id))                      # calls, tokens, cost, latency for this run
+python3 -m src.run_pilot
 ```
+If Method B stops before completing all 50 generations, it can be resumed using:
+
+```python
+python3 -m src.resume_method_b
+```
+Running these commands makes actual API calls and incurs costs. The resume script restores the previous valid Method B history and continues from the next generation.
 
 ### 7. What is logged
 
@@ -355,9 +355,13 @@ Every call appends one JSON line to `outputs/llm_logs/<run_id>.jsonl`, including
 
 | Function | Returns |
 |---|---|
-| `credit_remaining()` | Dollars left on the key |
-| `check_budget()` | Total spent on the key vs `BUDGET_USD`, as a dict with `spent`, `budget`, `left`, `fraction_used` |
-| `run_totals(run_id)` | Calls, tokens, cost and latency for one run, plus the share of the budget it used |
+| `credit_remaining()` | Remaining limit reported by the OpenRouter API key |
+| `check_budget()` | Budget usage information relative to the configured `BUDGET_USD` limit |
+| `run_totals(run_id)` | Number of calls, prompt/completion/total tokens, cost, latency, retried calls and fraction of the configured budget used for one run |
+
+`BUDGET_USD` is the experiment's configured spending limit. It should not be confused with the actual prepaid credit or spending limits on the OpenRouter account.
+
+`check_budget()` compares the API key's reported usage against `BUDGET_USD`. It prints a warning when usage reaches `WARN_AT` (80%) or exceeds the configured budget. It does not automatically stop experiment loops; stopping conditions must be implemented separately in the experiment runner.
 
 ### 9. Important notes
 
