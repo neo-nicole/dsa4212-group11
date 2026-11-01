@@ -1,0 +1,3 @@
+family,num_instances,pct_any_diff,pct_ff_bf_diff,pct_bf_ab_diff,mean_ff_bf_gap,mean_bf_ab_gap,mean_max_gap,largest_gap,bf_improvement_pct,ab_improvement_pct
+uniform_200,20,100.0,85.0,65.0,1.2,0.8,1.9,4,1.083,0.517
+uniform_500,20,100.0,100.0,75.0,3.3,1.05,3.8,6,1.232,-0.029

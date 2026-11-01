@@ -2,7 +2,7 @@
 Instance generator for 1D bin packing.
 
 Usage:
-    python generate_instances.py # creates ../data/{train,val,test}.json
+    python generate_instances.py # creates ../data/{train,val,in-test,out-test}.json
 
 In other scripts:
     from generate_instances import load_dataset, by_family
@@ -22,7 +22,12 @@ import numpy as np
 CAPACITY = 100 # fix bin capacity to 100
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(os.path.dirname(SRC_DIR), "data", "final_data")
-SPLIT_FILES = {"train": "train.json", "val": "val.json", "test": "test.json"}
+SPLIT_FILES = {
+    "train": "train.json",
+    "val": "val.json",
+    "in-test": "in-test.json",
+    "out-test": "out-test.json",
+}
 
 
 def uniform(rng, size, low=1, high=100):
@@ -65,43 +70,52 @@ def add_family(store, prefix, family, n_instances, base_seed, sampler):
 
 
 def generate_datasets():
-    datasets = {"train": {}, "val": {}, "test": {}}
+    datasets = {"train": {}, "val": {}, "in-test": {}, "out-test": {}}
 
     # Training set : 30 instances each
     tr = datasets["train"]
     train_instances = 30
     add_family(tr, "train_unif_200",  "uniform_200",    train_instances, 33,  lambda r: uniform(r, 200))
-    #add_family(tr, "train_small_200", "small_1_30_200", train_instances, 133, lambda r: uniform(r, 200, 1, 30))
+    # add_family(tr, "train_small_200", "small_1_30_200", train_instances, 133, lambda r: uniform(r, 200, 1, 30))
     add_family(tr, "train_unif_500",  "uniform_500",    train_instances, 233, lambda r: uniform(r, 500))
 
     # Validation set: same distributions as training, but 15 instances each
     va = datasets["val"]
     validation_instances = 15
     add_family(va, "val_unif_200",  "uniform_200",    validation_instances, 1033, lambda r: uniform(r, 200))
-    #add_family(va, "val_small_200", "small_1_30_200", validation_instances, 1133, lambda r: uniform(r, 200, 1, 30))
+    # add_family(va, "val_small_200", "small_1_30_200", validation_instances, 1133, lambda r: uniform(r, 200, 1, 30))
     add_family(va, "val_unif_500",  "uniform_500",    validation_instances, 1233, lambda r: uniform(r, 500))
 
-    # Test set: 20 instances each
-    te = datasets["test"]
+    # In-distribution test set: same distributions as training, but 20 instances each
+    it = datasets["in-test"]
+    in_test_instances = 20
+    add_family(it, "in-test_unif_200", "uniform_200", in_test_instances, 3033, lambda r: uniform(r, 200))
+    add_family(it, "in-test_unif_500", "uniform_500", in_test_instances, 3133, lambda r: uniform(r, 500))
+
+    # Out-of-distribution test set: 20 instances each
+    ot = datasets["out-test"]
     test_instances = 20
-    add_family(te, "test_weibull_200",   "weibull_200",          test_instances, 2033, lambda r: weibull(r, 200))
-    add_family(te, "test_large_200",     "large_50_100_200",     test_instances, 2133, lambda r: uniform(r, 200, 50, 100))
-    add_family(te, "test_identical_200", "near_identical_40_45", test_instances, 2233, lambda r: uniform(r, 200, 40, 45))
-    add_family(te, "test_unif_100",      "uniform_100",          test_instances, 2333, lambda r: uniform(r, 100))
-    add_family(te, "test_unif_1000",     "uniform_1000",         test_instances, 2433, lambda r: uniform(r, 1000))
+    add_family(ot, "out-test_weibull_200",   "weibull_200",          test_instances, 2033, lambda r: weibull(r, 200))
+    add_family(ot, "out-test_large_200",     "large_50_100_200",     test_instances, 2133, lambda r: uniform(r, 200, 50, 100))
+    add_family(ot, "out-test_identical_200", "near_identical_40_45", test_instances, 2233, lambda r: uniform(r, 200, 40, 45))
+    add_family(ot, "out-test_unif_100",      "uniform_100",         test_instances, 2333, lambda r: uniform(r, 100))
+    add_family(ot, "out-test_unif_1000",     "uniform_1000",         test_instances, 2433, lambda r: uniform(r, 1000))
 
     # for sorted, used same seed so that can ensure diff in performance is due to ordering, not underlying items
-    add_family(te, "test_sorted_desc_200", "sorted_largest_first_200",  20, 2533, lambda r: sorted_desc(r, 200))
-    add_family(te, "test_sorted_asc_200",  "sorted_smallest_first_200", 20, 2533, lambda r: sorted_asc(r, 200))
+    add_family(ot, "out-test_sorted_desc_200", "sorted_largest_first_200",  20, 2533, lambda r: sorted_desc(r, 200))
+    add_family(ot, "out-test_sorted_asc_200", "sorted_smallest_first_200", 20, 2533, lambda r: sorted_asc(r, 200))
 
     return datasets
 
 
 # helper functions
 def load_dataset(name, folder=DATA_DIR):
-    """ Load train/val/test datasets.
-    name is 'train', 'val', or 'test'.
+    """Load a dataset by split name.
+
+    Valid names are 'train', 'val', 'in-test', and 'out-test'.
     """
+    if name not in SPLIT_FILES:
+        raise ValueError(f"Unknown dataset split: {name}")
     with open(os.path.join(folder, f"{name}.json"), encoding="utf-8") as f:
         return json.load(f)
 
@@ -123,7 +137,7 @@ if __name__ == "__main__":
         path = os.path.join(DATA_DIR, SPLIT_FILES[split])
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
-        # Note: expect 60, 30, 140 instances for train, val, test respectively
+        # Note: expect 60, 30, 40, 140 instances for train, val, in-test, out-test.
         print(f"Created {split} dataset with {len(data)} instances.")
         # print summary of each split for quick check
         print(f"{split}: {len(data)} instances -> {path}")

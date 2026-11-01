@@ -30,7 +30,7 @@ from src.evaluation import evaluate, evaluate_instance
 from src.generate_instances import load_dataset
 
 ROOT = Path(__file__).resolve().parent.parent
-SPLITS = {"train", "val", "test"}
+SPLITS = {"train", "val", "in-test", "out-test"}
 WORKER_FLAG = "--sandbox-worker"
 
 SAFE_BUILTINS = {

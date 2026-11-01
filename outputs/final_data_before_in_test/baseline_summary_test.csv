@@ -1,0 +1,8 @@
+family,num_instances,pct_any_diff,pct_ff_bf_diff,pct_bf_ab_diff,mean_ff_bf_gap,mean_bf_ab_gap,mean_max_gap,largest_gap,bf_improvement_pct,ab_improvement_pct
+large_50_100_200,20,0.0,0.0,0.0,0.0,0.0,0.0,0,0.0,0.0
+near_identical_40_45,20,100.0,0.0,100.0,0.0,69.75,69.75,75,0.0,-69.75
+sorted_largest_first_200,20,85.0,0.0,85.0,0.0,1.85,1.85,5,0.0,-1.783
+sorted_smallest_first_200,20,100.0,0.0,100.0,0.0,5.45,5.45,10,0.0,4.209
+uniform_100,20,80.0,60.0,55.0,0.6,0.8,1.2,3,1.07,0.163
+uniform_1000,20,100.0,100.0,65.0,6.6,0.9,6.95,9,1.228,-0.037
+weibull_200,20,85.0,65.0,70.0,0.65,0.8,1.15,2,0.399,-0.011

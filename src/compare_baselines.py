@@ -6,7 +6,7 @@ from src.simulator import simulate
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = ROOT / 'outputs' / 'final_data'
-SPLITS = ('train', 'val', 'test')
+SPLITS = ('train', 'val', 'in-test', 'out-test')
 AB_A, AB_B = 11, 35
 
 

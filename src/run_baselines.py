@@ -16,7 +16,7 @@ for name, heuristic in heuristics.items():
 
     print(f"\n===== {name} =====")
 
-    for split in ["train", "val", "test"]:
+    for split in ["train", "val", "in-test", "out-test"]:
 
         result = evaluate(heuristic, split)
 
