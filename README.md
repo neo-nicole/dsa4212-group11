@@ -143,7 +143,7 @@ The evaluation flow is:
 candidate source
     -> syntax and signature validation
     -> isolated worker process
-    -> src.baselines.simulate(...)
+    -> src.simulator.simulate(...)
     -> src.evaluation.evaluate(...) or evaluate_instance(...)
     -> bins used, percentage excess, and aggregation
     -> JSON result
@@ -161,7 +161,7 @@ runtime, and per-instance results.
 
 The sandbox delegates simulation and metric calculation to
 `src.evaluation.py`, which uses the shared simulator in
-`src.baselines.py`. Whole-dataset mode calls `evaluate`; per-instance mode
+`src.simulator.py`. Whole-dataset mode calls `evaluate`; per-instance mode
 calls `evaluate_instance`, and the parent aggregates the individual results.
 
 The sandbox reports:
@@ -249,7 +249,7 @@ Method A, Method B and the pilot must all call the LLM through this module, so t
 pip install -r requirements.txt
 ```
 
-The client needs `requests` and `python-dotenv` (both listed in `requirements.txt`).
+The client needs `requests` and `python-dotenv`.
 
 ### 2. Set up your API key
 

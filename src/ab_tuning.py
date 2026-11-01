@@ -16,7 +16,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from src.generate_instances import load_dataset, by_family
-from src.baselines import simulate, first_fit, best_fit, make_ab_first_fit
+from src.baselines import first_fit, best_fit, make_ab_first_fit
+from src.simulator import simulate
 
 A_MAX, B_MAX = 30, 45 # selected arbitrarily, widen search if needed
 ROOT = Path(__file__).resolve().parent.parent
