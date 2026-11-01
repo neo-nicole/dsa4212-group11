@@ -1,0 +1,54 @@
+{
+  "A_original": {
+    "api_calls": 50,
+    "successful_api_calls": 50,
+    "valid_candidates": 50,
+    "invalid_or_timeout_candidates": 0,
+    "best_score": 5.90619132919229,
+    "mean_score": 6.182202496125396,
+    "total_api_cost_usd": 0.05342625,
+    "mean_api_cost_usd": 0.001068525,
+    "total_tokens": 33527,
+    "mean_tokens": 670.54
+  },
+  "B_combined": {
+    "api_calls": 51,
+    "successful_api_calls": 50,
+    "valid_candidates": 50,
+    "invalid_or_timeout_candidates": 1,
+    "best_score": 5.90619132919229,
+    "mean_score": 6.12311673605486,
+    "total_api_cost_usd": 0.113934,
+    "mean_api_cost_usd": 0.00227868,
+    "total_tokens": 64320,
+    "mean_tokens": 1286.4
+  },
+  "B_resume_only": {
+    "api_calls": 17,
+    "successful_api_calls": 17,
+    "valid_candidates": 17,
+    "invalid_or_timeout_candidates": 0,
+    "best_score": 5.90619132919229,
+    "mean_score": 5.981618595404467,
+    "total_api_cost_usd": 0.05024925,
+    "mean_api_cost_usd": 0.0029558382352941177,
+    "total_tokens": 26991,
+    "mean_tokens": 1587.7058823529412
+  },
+  "resume_metadata": {
+    "historical_valid_candidates": 33,
+    "new_valid_candidates": 17,
+    "total_valid_candidates": 50,
+    "target_valid_candidates": 50,
+    "last_historical_parent_generation": 33,
+    "first_generation_attempted": 34
+  },
+  "budget": {
+    "experiment_budget_usd": 15.0,
+    "previous_spending_usd": 0.117111,
+    "new_spending_usd": 0.050249,
+    "total_spending_usd": 0.16736,
+    "stopped_early": false,
+    "stop_reason": null
+  }
+}

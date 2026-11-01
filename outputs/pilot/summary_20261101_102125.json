@@ -1,0 +1,32 @@
+{
+  "A": {
+    "api_calls": 50,
+    "successful_api_calls": 50,
+    "valid_candidates": 50,
+    "invalid_or_timeout_candidates": 0,
+    "best_score": 5.90619132919229,
+    "mean_score": 6.182202496125396,
+    "total_api_cost_usd": 0.05342625,
+    "mean_api_cost_usd": 0.001068525,
+    "total_tokens": 33527,
+    "mean_tokens": 670.54
+  },
+  "B": {
+    "api_calls": 34,
+    "successful_api_calls": 33,
+    "valid_candidates": 33,
+    "invalid_or_timeout_candidates": 1,
+    "best_score": 5.90619132919229,
+    "mean_score": 6.196009717602033,
+    "total_api_cost_usd": 0.06368475,
+    "mean_api_cost_usd": 0.001929840909090909,
+    "total_tokens": 37329,
+    "mean_tokens": 1131.1818181818182
+  },
+  "budget": {
+    "experiment_budget_usd": 15.0,
+    "actual_spending_usd": 0.117111,
+    "stopped_early": true,
+    "stop_reason": "API request cost is unknown. Stopping to avoid overspending."
+  }
+}
