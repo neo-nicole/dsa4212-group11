@@ -5,7 +5,8 @@ from datetime import datetime
 from pathlib import Path
 
 from src.llm_client import call_llm
-from src.sandbox import run_candidate, _load_dataset
+from src.generate_instances import load_dataset
+from src.sandbox import run_candidate
 from src.run_pilot import (
     NUM_CALLS,
     TIMEOUT,
@@ -168,7 +169,7 @@ def main():
     BEST_DIR.mkdir(parents=True, exist_ok=True)
     best_path.write_text(best_code, encoding="utf-8")
 
-    train_data = _load_dataset("train")
+    train_data = load_dataset("train")
 
     # Include all previous spending in the $15 budget.
     budget_state = {
@@ -300,4 +301,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

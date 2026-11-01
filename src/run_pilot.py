@@ -19,7 +19,8 @@ from src.llm_client import (
     PRICE_MODEL,
     MAX_TOKENS,
 )
-from src.sandbox import run_candidate, _load_dataset
+from src.generate_instances import load_dataset
+from src.sandbox import run_candidate
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -422,7 +423,7 @@ def make_summary(records):
 def local_test():
     print("Running local sandbox test. No API calls will be made.")
 
-    train_data = _load_dataset("train")
+    train_data = load_dataset("train")
 
     result = run_candidate(
         source=DEMO_SOURCE,
@@ -460,7 +461,7 @@ def main():
         local_test()
         return
 
-    train_data = _load_dataset("train")
+    train_data = load_dataset("train")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     all_records = {}
