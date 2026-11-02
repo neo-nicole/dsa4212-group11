@@ -241,18 +241,18 @@ Invalid candidates should be rejected. For example, a candidate that returns a s
 
 ## Method A and Method B
 
-Both methods follow FunSearch's best-shot prompting (Romera-Paredes et al., 2024; [code](https://github.com/google-deepmind/funsearch)) and differ only in which programs go into the prompt. The code is in `src/run_pilot.py`, `src/prompts/method_a.py` and `src/prompts/method_b.py`.
-
 ### Shared setup
 
-- **Starting program.** Both methods start from Best Fit (`STARTING_PROGRAM` in `src/prompts/method_a.py`). It is evaluated before any LLM call and logged as generation 0 (0 tokens, no parents). It reproduces the Best Fit baseline on train.
-- **Prompt** (`generate_prompt(parents)` in `src/prompts/method_b.py`): the problem specification, then the parent programs renamed `priority_fn_v0`, `priority_fn_v1` (sorted from worse to better), then an empty header for the next version (e.g. `priority_fn_v2`, "Improved version of `priority_fn_v1`."). **The LLM is not given any scores**; within the prompt, the only signal of performance is the ordering.
-- **Extraction** (`extract_candidate(response, version)`): renames `priority_fn_v{k}` back to `priority_fn` for sandbox to run it. Replies without that function, or with invalid syntax, are logged as invalid.
-- **Score.** A candidate's score is its train score from the sandbox: % excess over the lower bound, averaged within each family and then across families (where lower is better).
+- **Starting program:** Both methods start from Best Fit. It is evaluated before any LLM call and logged as generation 0 (0 tokens, no parents). It reproduces the Best Fit baseline on train.
+- **Prompt:** Both methods use the same prompt format. Each prompt includes the problem specification (rules, function interface, constraints), existing program(s) for LLM to improve on, and the start of the next version to be completed by the LLM
+- **Extraction:**  `priority_fn_v{k}` is renamed back to `priority_fn` for sandbox to run it. Replies without that function, or with invalid syntax, are logged as invalid.
+- **Score:** A candidate's score is its train score from the sandbox: % excess over the lower bound, averaged within each family and then across families (where lower is better).
+
+Note: the LLM is never shown any scores. With two programs, it can only tell which is better from the version numbers (`priority_fn_v0` is worse, `priority_fn_v1` is better). Method A always shows only Best Fit (`v0`), Method B shows the 2 selected parents, except on its first call, when only Best Fit exists.
 
 ### Method A: independent sampling
 
-Every call uses the same prompt, `INITIAL_PROMPT`: Best Fit as `priority_fn_v0`, and LLM is asked to generate `priority_fn_v1`. Later calls never see earlier outputs.
+Every call uses the same prompt, `INITIAL_PROMPT`: Best Fit is shown as `priority_fn_v0`, and LLM is asked to generate `priority_fn_v1`. Later calls never see earlier outputs.
 
 ### Method B: LLM-guided evolution
 
@@ -264,10 +264,10 @@ Each call:
    - they are sorted from worse to better, so the better one becomes `priority_fn_v1`.
    On the first call, the prompt has Best Fit as the only parent (identical to Method A).
 2. **Builds the prompt** with `generate_prompt(parents)` and asks for the next version.
-3. **Evaluates the child** on train and logs it with its parents.
+3. **Evaluates the new program** on the training set (% excess) and logs it, along with which parents were in its prompt.
 4. **Adds the child to the valid candidates** if it runs successfully, can be chosen as a parent later. Invalid candidates are logged but will not be selected to become parents.
 
-### Settings (top of `src/run_pilot.py`)
+### Pilot Run Settings (`src/run_pilot.py`)
 - `NUM_CALLS`: 50 LLM calls per method in the pilot
 - `FUNCTIONS_PER_PROMPT`: 2 parents per prompt
 - `SELECTION_TEMPERATURE`: 0.1 (follows FunSearch's default value)
@@ -275,7 +275,7 @@ Each call:
 
 ### Output files
 
-- `outputs/pilot/candidates_<run_id>.jsonl`: one line per candidate, starting with Best Fit (generation 0). Recorded fields include: API fields (tokens, cost, latency), evaluation result,`parent_ids`, `parent_scores` (% excess), `num_parents` and `cumulative_tokens`. Plot the best score so far against `cumulative_tokens` to compare the methods.
+- `outputs/pilot/candidates_<run_id>.jsonl`: one line per candidate, starting with Best Fit (generation 0). Recorded fields include: API fields (tokens, cost, latency), evaluation result,`parent_ids`, `parent_scores` (% excess), `num_parents` and `cumulative_tokens`. 
 - `outputs/pilot/best_candidates/<run_id>.py`: best candidate of the run
 - `outputs/pilot/summary_<timestamp>.json`: per-method summary, including the starting program's score.
 
