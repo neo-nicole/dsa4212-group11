@@ -6,10 +6,10 @@ import re
 import statistics
 from datetime import datetime
 from pathlib import Path
-from src.prompts.method_a import INITIAL_PROMPT
-from src.prompts.method_b import EVOLUTION_PROMPT
+import numpy as np
 
-from prompt_toolkit import prompt
+from src.prompts.method_a import STARTING_PROGRAM
+from src.prompts.method_b import generate_prompt
 
 from src.llm_client import (
     call_llm,
@@ -30,6 +30,14 @@ BEST_DIR = OUTPUT_DIR / "best_candidates"
 NUM_CALLS = 50
 TIMEOUT = 10.0
 BUDGET_USD = 15.0
+
+#Method B settings
+FUNCTIONS_PER_PROMPT = 2   # k = 2 parents per prompt
+SELECTION_TEMPERATURE = 0.1
+RANDOM_SEED = 0
+
+# Method A's prompt, and Method B's 1st prompt - Best Fit as priority_fn_v0.
+INITIAL_PROMPT = generate_prompt([STARTING_PROGRAM])
 
 def can_make_request(prompt, budget_state):
     """Check whether another API request can safely fit within the budget."""
@@ -125,8 +133,9 @@ def save_jsonl(path, record):
         f.write(json.dumps(record, allow_nan=False) + "\n")
 
 
-def extract_candidate(response):
-    """Extract and check the Python function from the LLM response."""
+def extract_candidate(response, version):
+    """Extract priority_fn_v{version} from the LLM response and rename it
+    back to priority_fn for the sandbox to run"""
     if not response:
         return None, "empty response"
 
@@ -137,10 +146,13 @@ def extract_candidate(response):
         text = re.sub(r"^```(?:python)?\s*", "", text)
         text = re.sub(r"\s*```$", "", text)
 
-    # If there is explanatory text, start from the function definition.
-    match = re.search(r"(?m)^def\s+priority_fn\s*\(", text)
-    if match:
-        text = text[match.start():]
+    # Start from the requested function and rename it to priority_fn.
+    match = re.search(rf"(?m)^def\s+priority_fn_v{version}\s*\(", text)
+    if match is None:
+        return None, f"response does not define priority_fn_v{version}"
+    text = re.sub(
+        rf"\bpriority_fn_v{version}\b", "priority_fn", text[match.start():]
+    )
 
     try:
         tree = ast.parse(text)
@@ -165,25 +177,29 @@ def format_value(value):
     return f"{value:.4f}" if isinstance(value, (int, float)) else str(value)
 
 
-def build_evolution_prompt(parent_code, parent_result,
-                           best_score, candidate_count):
-    family_scores = parent_result.get("family_scores") or {}
+def select_parents(valid_candidates, rng):
+    """Parent selection for Method B.
 
-    return EVOLUTION_PROMPT.format(
-        parent_code=parent_code,
-        parent_score=format_value(parent_result.get("score")),
-        mean_bins=format_value(parent_result.get("mean_bins")),
-        uniform_200_score=format_value(
-            family_scores.get("uniform_200")
-        ),
-        uniform_500_score=format_value(
-            family_scores.get("uniform_500")
-        ),
-        runtime=format_value(parent_result.get("total_runtime")),
-        status=parent_result.get("status", "unknown"),
-        best_score=format_value(best_score),
-        candidate_count=candidate_count,
-    )
+    valid_candidates: list of {"id", "code", "score"} (score = % excess).
+    Candidates with the same score are counted once, keeping the shortest code.
+    Parents are drawn with replacement (follows funsearch), 
+    with probability proportional to exp(-score/T) (better candidates have higher chance of getting selected), 
+    then sorted from worse to better.
+    """
+    by_score = {}
+    for c in valid_candidates:
+        kept = by_score.get(c["score"])
+        if kept is None or len(c["code"]) < len(kept["code"]):
+            by_score[c["score"]] = c
+    unique = list(by_score.values())
+
+    scores = np.array([c["score"] for c in unique])
+    weights = np.exp(-(scores - scores.min()) / SELECTION_TEMPERATURE)
+    k = min(FUNCTIONS_PER_PROMPT, len(unique))
+    idx = rng.choice(len(unique), size=k, p=weights / weights.sum())
+
+    parents = [unique[i] for i in idx]
+    return sorted(parents, key=lambda c: c["score"], reverse=True)
 
 
 # ============================================================
@@ -191,12 +207,18 @@ def build_evolution_prompt(parent_code, parent_result,
 # ============================================================
 
 def evaluate_and_record(method, generation, response, train_data,
-                        run_id, api_result):
-    code, extraction_error = extract_candidate(response)
+                        run_id, api_result, parents, cumulative_tokens):
+    """parents: list of {"id", "code", "score"} shown in the prompt."""
+    code, extraction_error = extract_candidate(response, len(parents))
 
     record = {
         "method": method,
+        "run_id": run_id,
         "generation": generation,
+        "parent_ids": [p["id"] for p in parents],
+        "parent_scores": [p["score"] for p in parents],
+        "num_parents": len(parents),
+        "cumulative_tokens": cumulative_tokens,
         "api_error": api_result.get("error"),
         "api_cost": api_result.get("cost"),
         "prompt_tokens": (api_result.get("usage") or {}).get("prompt_tokens"),
@@ -229,11 +251,35 @@ def evaluate_and_record(method, generation, response, train_data,
         record["evaluation"] = result
         record["valid"] = result.get("status") == "ok"
 
-    save_jsonl(
-        OUTPUT_DIR / f"candidates_{method}.jsonl",
-        record,
-    )
+    save_jsonl(OUTPUT_DIR / f"candidates_{run_id}.jsonl", record)
 
+    return record
+
+
+def record_starting_program(method, train_data, run_id):
+    """Evaluate Best Fit and log it as generation 0."""
+    result = run_candidate(
+        source=STARTING_PROGRAM, dataset=train_data, timeout=TIMEOUT
+    )
+    if result.get("status") != "ok":
+        raise RuntimeError(f"Starting program failed: {result}")
+    record = {
+        "method": method,
+        "run_id": run_id,
+        "generation": 0,
+        "parent_ids": [],
+        "parent_scores": [],
+        "num_parents": 0,
+        "cumulative_tokens": 0,
+        "total_tokens": 0,
+        "api_cost": 0.0,
+        "api_error": None,
+        "candidate_code": STARTING_PROGRAM,
+        "extraction_error": None,
+        "evaluation": result,
+        "valid": True,
+    }
+    save_jsonl(OUTPUT_DIR / f"candidates_{run_id}.jsonl", record)
     return record
 
 
@@ -242,11 +288,16 @@ def evaluate_and_record(method, generation, response, train_data,
 # ============================================================
 
 def run_method_a(train_data, run_id, budget_state):
+    """Every call uses the same prompt: Best Fit as priority_fn_v0."""
     print("\nStarting Method A: Independent Sampling")
 
-    best_code = None
-    best_score = None
-    records = []
+    start = record_starting_program("A", train_data, run_id)
+    starting_parent = {
+        "id": 0, "code": STARTING_PROGRAM, "score": start["evaluation"]["score"]
+    }
+    best_score = starting_parent["score"]
+    cumulative_tokens = 0
+    records = [start]
 
     for generation in range(1, NUM_CALLS + 1):
         print(f"\nMethod A - Call {generation}/{NUM_CALLS}")
@@ -258,34 +309,28 @@ def run_method_a(train_data, run_id, budget_state):
             prompt=INITIAL_PROMPT,
             run_id=run_id,
             method="A",
-            generation=None,
+            generation=generation,
         )
-
         update_budget_after_call(api_result, budget_state)
+        cumulative_tokens += api_result.get("total_tokens") or 0
 
         record = evaluate_and_record(
-            "A", generation, api_result.get("text"),
-            train_data, run_id, api_result,
+            "A", generation, api_result.get("text"), train_data, run_id,
+            api_result, [starting_parent], cumulative_tokens,
         )
         records.append(record)
 
-        result = record["evaluation"]
-        score = result.get("score")
-
-        if record["valid"] and (
-            best_score is None or score < best_score
-        ):
+        score = record["evaluation"].get("score")
+        if record["valid"] and score < best_score:
             best_score = score
-            best_code = record["candidate_code"]
-
             BEST_DIR.mkdir(parents=True, exist_ok=True)
-            (BEST_DIR / "method_A.py").write_text(
-                best_code, encoding="utf-8"
+            (BEST_DIR / f"{run_id}.py").write_text(
+                record["candidate_code"], encoding="utf-8"
             )
 
         print(
-            f"Status: {result.get('status')} | "
-            f"Score: {format_value(score)}"
+            f"Status: {record['evaluation'].get('status')} | "
+            f"Score: {format_value(score)} | Best: {format_value(best_score)}"
         )
         if budget_state["stop"]:
             break
@@ -294,34 +339,30 @@ def run_method_a(train_data, run_id, budget_state):
 
 
 # ============================================================
-# Method B: Evolutionary feedback
+# Method B: LLM-guided evolution
 # ============================================================
 
 def run_method_b(train_data, run_id, budget_state):
-    print("\nStarting Method B: Evolutionary Feedback")
+    """Each call: choose parents from the valid candidates, ask for the next
+    version, and add the child to the valid candidates."""
+    print("\nStarting Method B: LLM-Guided Evolution")
 
-    parent_code = None
-    parent_result = None
+    rng = np.random.default_rng(RANDOM_SEED)
 
-    best_code = None
-    best_score = None
-    records = []
+    start = record_starting_program("B", train_data, run_id)
+    valid_candidates = [{
+        "id": 0, "code": STARTING_PROGRAM, "score": start["evaluation"]["score"]
+    }]
+    best_score = valid_candidates[0]["score"]
+    cumulative_tokens = 0
+    records = [start]
 
     for generation in range(1, NUM_CALLS + 1):
         print(f"\nMethod B - Generation {generation}/{NUM_CALLS}")
 
-        # First generation uses the exact same initial prompt as A.
-        if generation == 1 or parent_code is None:
-            prompt = INITIAL_PROMPT
-        else:
-            prompt = build_evolution_prompt(
-                parent_code=parent_code,
-                parent_result=parent_result,
-                best_score=best_score,
-                candidate_count=len(records),
-            )
+        parents = select_parents(valid_candidates, rng)
+        prompt = generate_prompt([p["code"] for p in parents])
 
-        # Check the budget before every generation, including generation 1.
         if not can_make_request(prompt, budget_state):
             break
 
@@ -331,42 +372,37 @@ def run_method_b(train_data, run_id, budget_state):
             method="B",
             generation=generation,
         )
-
         update_budget_after_call(api_result, budget_state)
-
+        cumulative_tokens += api_result.get("total_tokens") or 0
 
         record = evaluate_and_record(
-            "B", generation, api_result.get("text"),
-            train_data, run_id, api_result,
+            "B", generation, api_result.get("text"), train_data, run_id,
+            api_result, parents, cumulative_tokens,
         )
         records.append(record)
 
-        result = record["evaluation"]
-        score = result.get("score")
-
-        # Every valid candidate becomes the next parent.
-        # Invalid candidates and timeouts do not replace the parent.
+        score = record["evaluation"].get("score")
         if record["valid"]:
-            parent_code = record["candidate_code"]
-            parent_result = result
-
-            # Keep the best candidate separately.
-            if best_score is None or score < best_score:
+            valid_candidates.append({
+                "id": generation,
+                "code": record["candidate_code"],
+                "score": score,
+            })
+            if score < best_score:
                 best_score = score
-                best_code = record["candidate_code"]
-
                 BEST_DIR.mkdir(parents=True, exist_ok=True)
-                (BEST_DIR / "method_B.py").write_text(
-                    best_code, encoding="utf-8"
+                (BEST_DIR / f"{run_id}.py").write_text(
+                    record["candidate_code"], encoding="utf-8"
                 )
 
         print(
-            f"Status: {result.get('status')} | "
-            f"Score: {format_value(score)}"
+            f"Parents: {record['parent_ids']} | "
+            f"Status: {record['evaluation'].get('status')} | "
+            f"Score: {format_value(score)} | Best: {format_value(best_score)}"
         )
-
         if budget_state["stop"]:
             break
+
     return records
 
 
@@ -375,6 +411,10 @@ def run_method_b(train_data, run_id, budget_state):
 # ============================================================
 
 def make_summary(records):
+    # Generation 0 is the starting program (Best Fit), not an API call.
+    start = records[0] if records and records[0]["generation"] == 0 else None
+    records = [r for r in records if r["generation"] != 0]
+
     successful = [
         r for r in records
         if r.get("api_error") is None
@@ -403,6 +443,9 @@ def make_summary(records):
     ]
 
     return {
+        "starting_program_score": (
+            start["evaluation"]["score"] if start else None
+        ),
         "api_calls": len(records),
         "successful_api_calls": len(successful),
         "valid_candidates": len(valid),
@@ -425,16 +468,16 @@ def local_test():
 
     train_data = load_dataset("train")
 
-    result = run_candidate(
-        source=DEMO_SOURCE,
-        dataset=train_data,
-        timeout=TIMEOUT,
-    )
-
-    print(json.dumps(result, indent=2))
-
-    if result.get("status") != "ok":
-        raise RuntimeError("Local candidate test failed.")
+    for name, source in (("demo", DEMO_SOURCE),
+                         ("starting program", STARTING_PROGRAM)):
+        result = run_candidate(
+            source=source,
+            dataset=train_data,
+            timeout=TIMEOUT,
+        )
+        print(name, result.get("status"), result.get("score"))
+        if result.get("status") != "ok":
+            raise RuntimeError(f"Local {name} test failed.")
 
     print("\nLocal test passed!")
 
