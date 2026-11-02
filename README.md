@@ -259,13 +259,13 @@ Every call uses the same prompt, `INITIAL_PROMPT`: Best Fit is shown as `priorit
 Each call:
 
 1. **Selects parents** from all valid candidates so far, including Best Fit (`select_parents`):
-   - candidates with identical scores count once, keeping the shortest code ;
-   - 2 parents are drawn with probability proportional to `exp(-score/T)`, with replacement
+   - candidates with identical scores count once, keeping the shortest code
+   - 2 parents are drawn with probability proportional to `exp(-score/T)` (better candidates have higher chance of getting selected), with replacement
    - they are sorted from worse to better, so the better one becomes `priority_fn_v1`.
    On the first call, the prompt has Best Fit as the only parent (identical to Method A).
 2. **Builds the prompt** with `generate_prompt(parents)` and asks for the next version.
 3. **Evaluates the new program** on the training set (% excess) and logs it, along with which parents were in its prompt.
-4. **Adds the child to the valid candidates** if it runs successfully, can be chosen as a parent later. Invalid candidates are logged but will not be selected to become parents.
+4. **Adds the child to the valid candidates** if it runs successfully, so it can be chosen as a parent later. Invalid candidates are logged but will not be selected to become parents.
 
 ### Pilot Run Settings (`src/run_pilot.py`)
 - `NUM_CALLS`: 50 LLM calls per method in the pilot
