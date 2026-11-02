@@ -1,5 +1,15 @@
+"""Shared specification and starting program for Methods A and B."""
 
-INITIAL_PROMPT = """
+# Best Fit in the priority_fn interface. Both methods start from it, as in
+# FunSearch. Reproduces the Best Fit baseline exactly on train.
+STARTING_PROGRAM = '''
+def priority_fn(item_size, open_bin_remaining_capacities, capacity):
+    """Best Fit: the feasible bin with the least space left scores highest."""
+    gaps = np.asarray(open_bin_remaining_capacities) - item_size
+    return np.append(-gaps, -capacity - 1)
+'''.strip()
+
+SPECIFICATION = """
 You are an expert Python programmer and optimisation researcher
 specialising in online one-dimensional bin packing heuristics.
 
@@ -11,9 +21,9 @@ Items arrive sequentially; future item sizes are unknown.
 - Minimise the number of bins used.
 
 FUNCTION INTERFACE
-Implement a deterministic Python function:
+Every priority function below has the signature:
 
-def priority_fn(item_size, open_bin_remaining_capacities, capacity):
+def priority_fn_vN(item_size, open_bin_remaining_capacities, capacity):
 
 - item_size: current item size.
 - open_bin_remaining_capacities: a list or NumPy array of remaining
@@ -45,6 +55,6 @@ CONSTRAINTS
 - Do not modify the simulator or evaluator.
 
 OUTPUT
-Return only valid Python code for one complete function.
+Return only valid Python code for the one function requested at the end.
 No Markdown fences, explanations, or additional functions.
 """.strip()
