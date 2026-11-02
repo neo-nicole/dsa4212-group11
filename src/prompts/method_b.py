@@ -34,7 +34,7 @@ def generate_prompt(parents: list[str]) -> str:
             "one-dimensional bin packing. Study it and develop a new heuristic\n"
             "that may improve on it."
         )
-    else: 
+    else: # evolve based on all selected parents
         intro = (
             "Below are previously discovered priority functions for online\n"
             "one-dimensional bin packing, ordered from lower to higher\n"
