@@ -1,59 +1,50 @@
 
 INITIAL_PROMPT = """
 You are an expert Python programmer and optimisation researcher
-specialising in online bin packing heuristics. Your task is to design
-a deterministic bin-selection heuristic for the one-dimensional
-online bin packing problem.
+specialising in online one-dimensional bin packing heuristics.
 
 PROBLEM DEFINITION
+Items arrive sequentially; future item sizes are unknown.
+- Bin capacity: 100.
+- Item sizes: integers from 1 to 100.
+- Pack every item without exceeding bin capacity.
+- Minimise the number of bins used.
 
-Items arrive sequentially and future item sizes are unknown.
-- Bin capacity: 100
-- Item sizes: integers from 1 to 100
-- Every item must be packed.
-- No bin may exceed its capacity.
-- The objective is to minimise the total number of bins used.
-
-REQUIRED FUNCTION
-
-Implement exactly this Python function:
+FUNCTION INTERFACE
+Implement a deterministic Python function:
 
 def priority_fn(item_size, open_bin_remaining_capacities, capacity):
 
-INPUTS
-- item_size: Size of the current item.
-- open_bin_remaining_capacities: A NumPy array or list containing
-  the remaining capacities of currently open bins that can fit
-  the current item. Bins that cannot fit the item have already
-  been removed. The array may be empty.
-- capacity: Maximum bin capacity.
+- item_size: current item size.
+- open_bin_remaining_capacities: a list or NumPy array of remaining
+  capacities for ONLY existing bins that can fit the current item.
+  It may be empty.
+- capacity: maximum bin capacity.
+- Return len(open_bin_remaining_capacities) + 1 finite numerical scores.
+- Scores for existing bins come first, in their given order.
+- The final score represents opening a new bin.
+- The simulator selects the action with the HIGHEST score.
 
-OUTPUTS
-- Return a list of numerical priority scores.
-- The list must have length
-  len(open_bin_remaining_capacities) + 1.
-- Score at index i corresponds to placing the item into existing
-  bin i.
-- The final score corresponds to opening a new bin.
-- Higher scores indicate more preferred actions.
-- The simulator selects the feasible action with the highest score.
+GENERALISATION OBJECTIVE
+Design a general-purpose heuristic that remains effective across item-size
+ distributions, sequence lengths, and arrival orderings different from
+ those encountered during development. Avoid relying on a particular
+ distribution, sequence length, or ordering. Decisions must use only
+ the current item and feasible existing-bin capacities; never assume
+ knowledge of future items or the item-generation process.
 
 CONSTRAINTS
-1. Implement only the priority_fn function.
-2. Use only the current item size, existing bin capacities,
-   and total bin capacity.
-3. Do not use future items or information about the full input sequence.
-4. Do not use external libraries, file access, randomness,
-   or global variables.
-5. The function must be deterministic and computationally efficient.
-6. Return only finite numerical scores (no NaN or infinity).
-7. Always return the correct number of scores.
-   If the array is empty, return exactly one score for opening a new bin.
-8. The new-bin action must always remain feasible.
+- Use only the three function arguments; never inspect future items.
+- Do not import any libraries. NumPy is already available as np.
+- You may use NumPy operations supported by the sandbox.
+- Use only operations permitted by the execution environment.
+- Do not use file access, randomness, or mutable global state.
+- Do not define helper functions.
+- Return exactly one score if there are no feasible existing bins.
+- Keep the implementation deterministic and computationally efficient.
+- Do not modify the simulator or evaluator.
 
-OUTPUT FORMAT
-
-Return only valid Python code containing the complete priority_fn
-function. Do not include Markdown code fences, explanations,
-examples, or additional functions.
+OUTPUT
+Return only valid Python code for one complete function.
+No Markdown fences, explanations, or additional functions.
 """.strip()
