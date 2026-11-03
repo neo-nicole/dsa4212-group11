@@ -55,8 +55,8 @@ evaluate(my_heuristic, "out-test") # Out-of-distribution test set
 You can also pass a JSON file path or an already-loaded dataset dictionary.
 
 **Dataset usage:**
-- **Train:** Score candidates during LLM generation/evolution.
-- **Validation:** Select the best candidate.
+- **Train:** Used for training-related experiments and development.
+- **Validation:** Used for pilot experiments, candidate comparison, and selection.
 - **In-test:** Final evaluation on the same distributions as training.
 - **Out-test:** Final generalisation evaluation on unseen distributions only. Do not use for tuning.
 
@@ -243,10 +243,10 @@ Invalid candidates should be rejected. For example, a candidate that returns a s
 
 ### Shared setup
 
-- **Starting program:** Both methods start from Best Fit. It is evaluated before any LLM call and logged as generation 0 (0 tokens, no parents). It reproduces the Best Fit baseline on train.
+- **Starting program:** Both methods start from Best Fit. It is evaluated before any LLM call and logged as generation 0 (0 tokens, no parents). For the validation pilot, it is evaluated on the validation set.
 - **Prompt:** Both methods use the same prompt format. Each prompt includes the problem specification (rules, function interface, constraints), existing program(s) for LLM to improve on, and the start of the next version to be completed by the LLM
 - **Extraction:**  `priority_fn_v{k}` is renamed back to `priority_fn` for sandbox to run it. Replies without that function, or with invalid syntax, are logged as invalid.
-- **Score:** A candidate's score is its train score from the sandbox: % excess over the lower bound, averaged within each family and then across families (where lower is better).
+- **Score:** A candidate's score is its validation score from the sandbox: % excess over the lower bound, averaged within each family and then across families (where lower is better).
 
 Note: the LLM is never shown any scores. With two programs, it can only tell which is better from the version numbers (`priority_fn_v0` is worse, `priority_fn_v1` is better). Method A always shows only Best Fit (`v0`), Method B shows the 2 selected parents, except on its first call, when only Best Fit exists.
 
@@ -264,20 +264,32 @@ Each call:
    - they are sorted from worse to better, so the better one becomes `priority_fn_v1`.
    On the first call, the prompt has Best Fit as the only parent (identical to Method A).
 2. **Builds the prompt** with `generate_prompt(parents)` and asks for the next version.
-3. **Evaluates the new program** on the training set (% excess) and logs it, along with which parents were in its prompt.
+3. **Evaluates the new program** on the validation set (% excess) and logs it, along with which parents were in its prompt.
 4. **Adds the child to the valid candidates** if it runs successfully, so it can be chosen as a parent later. Invalid candidates are logged but will not be selected to become parents.
 
 ### Pilot Run Settings (`src/run_pilot.py`)
-- `NUM_CALLS`: 50 LLM calls per method in the pilot
+- `NUM_CALLS`: 300 LLM calls per method in the pilot
 - `FUNCTIONS_PER_PROMPT`: 2 parents per prompt
 - `SELECTION_TEMPERATURE`: 0.1 (follows FunSearch's default value)
 - `RANDOM_SEED`: 0 for parent selection
+- `DATASET`: `val` (validation set)
+- `BUDGET_USD`: 15.0 (shared experiment budget across both methods)
 
 ### Output files
 
 - `outputs/pilot/candidates_<run_id>.jsonl`: one line per candidate, starting with Best Fit (generation 0). Recorded fields include: API fields (tokens, cost, latency), evaluation result,`parent_ids`, `parent_scores` (% excess), `num_parents` and `cumulative_tokens`. 
 - `outputs/pilot/best_candidates/<run_id>.py`: best candidate of the run
 - `outputs/pilot/summary_<timestamp>.json`: per-method summary, including the starting program's score.
+- `outputs/pilot/pilot_curves.png`: Actual candidate scores against cumulative token usage, with rolling averages.
+- `outputs/pilot/best_so_far_curves.png`: Best-so-far performance against cumulative token usage. 
+
+### Generate pilot plots
+
+After running the pilot, generate the performance plots from the saved candidate files:
+
+```bash
+python3 -m src.plot_pilot
+```
 
 ## Using the OpenRouter API Key and LLM Client
 
@@ -348,7 +360,7 @@ print(out["cost"])          # USD
 
 ### 6. Use the client in an experiment loop
 
-The experiment runners use `call_llm()` to send requests and record token usage, cost and latency. `BUDGET_USD` provides a spending safeguard, while `NUM_CALLS` in `src/run_pilot.py` controls the number of LLM calls per method (50 for the pilot). How Method A and Method B build their prompts is described in [Method A and Method B](#method-a-and-method-b).
+The experiment runners use `call_llm()` to send requests and record token usage, cost and latency. `BUDGET_USD` provides a spending safeguard, while `NUM_CALLS` in `src/run_pilot.py` controls the number of LLM calls per method (300 for the pilot). How Method A and Method B build their prompts is described in [Method A and Method B](#method-a-and-method-b).
 
 To run the experiment from the project root:
 
