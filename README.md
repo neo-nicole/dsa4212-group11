@@ -243,7 +243,7 @@ Invalid candidates should be rejected. For example, a candidate that returns a s
 
 ### Shared setup
 
-- **Starting program:** Both methods start from Best Fit. It is evaluated before any LLM call and logged as generation 0 (0 tokens, no parents). For the validation pilot, it is evaluated on the validation set.
+- **Starting program:** Both methods start from Best Fit. It is evaluated before any LLM call and logged as generation 0 (0 tokens, no parents). During the pilot, Best Fit and all generated candidates are evaluated on the training set (train). The validation set (val) is reserved for evaluating and comparing candidate heuristics and experimental configurations after evolution.
 - **Prompt:** Both methods use the same prompt format. Each prompt includes the problem specification (rules, function interface, constraints), existing program(s) for LLM to improve on, and the start of the next version to be completed by the LLM
 - **Extraction:**  `priority_fn_v{k}` is renamed back to `priority_fn` for sandbox to run it. Replies without that function, or with invalid syntax, are logged as invalid.
 - **Score:** A candidate's score is its validation score from the sandbox: % excess over the lower bound, averaged within each family and then across families (where lower is better).
@@ -259,12 +259,13 @@ Every call uses the same prompt, `INITIAL_PROMPT`: Best Fit is shown as `priorit
 Each call:
 
 1. **Selects parents** from all valid candidates so far, including Best Fit (`select_parents`):
-   - candidates with identical scores count once, keeping the shortest code
+   - candidates with identical per-instance performance signatures count once, keeping the shortest code
+   - each signature is the ordered tuple of finite per-instance percentage-excess scores
    - 2 parents are drawn with probability proportional to `exp(-score/T)` (better candidates have higher chance of getting selected), with replacement
    - they are sorted from worse to better, so the better one becomes `priority_fn_v1`.
    On the first call, the prompt has Best Fit as the only parent (identical to Method A).
 2. **Builds the prompt** with `generate_prompt(parents)` and asks for the next version.
-3. **Evaluates the new program** on the validation set (% excess) and logs it, along with which parents were in its prompt.
+3. **Evaluates the new program** on the training set (% excess) and logs its signature, along with which parents were in its prompt.
 4. **Adds the child to the valid candidates** if it runs successfully, so it can be chosen as a parent later. Invalid candidates are logged but will not be selected to become parents.
 
 ### Pilot Run Settings (`src/run_pilot.py`)
@@ -272,12 +273,24 @@ Each call:
 - `FUNCTIONS_PER_PROMPT`: 2 parents per prompt
 - `SELECTION_TEMPERATURE`: 0.1 (follows FunSearch's default value)
 - `RANDOM_SEED`: 0 for parent selection
-- `DATASET`: `val` (validation set)
+- `DATASET`: `train` (training set for evolutionary feedback)
 - `BUDGET_USD`: 15.0 (shared experiment budget across both methods)
+
+The Method B selection temperature can be overridden from the command line:
+
+```bash
+python3 -m src.run_pilot --method B --selection-temperature 0.1
+python3 -m src.run_pilot --method B --selection-temperature 0.5
+python3 -m src.run_pilot --method B --selection-temperature 1.0
+```
+
+Each summary records the selected temperature and other experiment settings.
+The standalone `src.run_method_b` launcher uses the module default and does not
+accept this command-line override.
 
 ### Output files
 
-- `outputs/pilot/candidates_<run_id>.jsonl`: one line per candidate, starting with Best Fit (generation 0). Recorded fields include: API fields (tokens, cost, latency), evaluation result,`parent_ids`, `parent_scores` (% excess), `num_parents` and `cumulative_tokens`. 
+- `outputs/pilot/candidates_<run_id>.jsonl`: one line per candidate, starting with Best Fit (generation 0). Recorded fields include: API fields (tokens, cost, latency), evaluation result, ordered per-instance `signature`, `parent_ids`, `parent_scores` (% excess), `num_parents` and `cumulative_tokens`.
 - `outputs/pilot/best_candidates/<run_id>.py`: best candidate of the run
 - `outputs/pilot/summary_<timestamp>.json`: per-method summary, including the starting program's score.
 - `outputs/pilot/pilot_curves.png`: Actual candidate scores against cumulative token usage, with rolling averages.
