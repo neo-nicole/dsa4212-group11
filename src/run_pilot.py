@@ -2,6 +2,7 @@
 import argparse
 import ast
 import json
+import math
 import re
 import statistics
 from datetime import datetime
@@ -177,21 +178,49 @@ def format_value(value):
     return f"{value:.4f}" if isinstance(value, (int, float)) else str(value)
 
 
-def select_parents(valid_candidates, rng):
-    """Parent selection for Method B.
+def get_signature(evaluation, dataset):
+    """Return ordered per-instance scores from a successful evaluation."""
+    if evaluation.get("status") != "ok":
+        raise ValueError("Cannot create a signature for an invalid evaluation")
 
-    valid_candidates: list of {"id", "code", "score"} (score = % excess).
-    Candidates with the same score are counted once, keeping the shortest code.
-    Parents are drawn with replacement (follows funsearch), 
-    with probability proportional to exp(-score/T) (better candidates have higher chance of getting selected), 
-    then sorted from worse to better.
+    results = evaluation.get("results")
+    if not isinstance(results, list) or len(results) != len(dataset):
+        raise ValueError("Missing or incomplete per-instance evaluation results")
+
+    signature = []
+    for expected_id, row in zip(dataset.keys(), results):
+        if (
+            not isinstance(row, dict)
+            or row.get("instance_id") != expected_id
+            or row.get("status") != "ok"
+        ):
+            raise ValueError(
+                "Instance results are missing, invalid, or out of order"
+            )
+        score = row.get("score")
+        if (
+            isinstance(score, bool)
+            or not isinstance(score, (int, float, np.integer, np.floating))
+            or not math.isfinite(float(score))
+        ):
+            raise ValueError("Invalid instance score in performance signature")
+        signature.append(float(score))
+
+    return tuple(signature)
+
+
+def select_parents(valid_candidates, rng):
+    """Select Method B parents, keeping one shortest program per signature.
+
+    Candidates are sampled with replacement using score-weighted probabilities,
+    then sorted from worse to better for the evolution prompt.
     """
-    by_score = {}
+    by_signature = {}
     for c in valid_candidates:
-        kept = by_score.get(c["score"])
+        kept = by_signature.get(c["signature"])
         if kept is None or len(c["code"]) < len(kept["code"]):
-            by_score[c["score"]] = c
-    unique = list(by_score.values())
+            by_signature[c["signature"]] = c
+    unique = list(by_signature.values())
 
     scores = np.array([c["score"] for c in unique])
     weights = np.exp(-(scores - scores.min()) / SELECTION_TEMPERATURE)
@@ -250,6 +279,16 @@ def evaluate_and_record(method, generation, response, val_data,
 
         record["evaluation"] = result
         record["valid"] = result.get("status") == "ok"
+        if record["valid"]:
+            try:
+                record["signature"] = list(get_signature(result, val_data))
+            except ValueError as exc:
+                record["valid"] = False
+                record["evaluation"] = {
+                    **result,
+                    "status": "invalid",
+                    "error": str(exc),
+                }
 
     save_jsonl(OUTPUT_DIR / f"candidates_{run_id}.jsonl", record)
 
@@ -263,6 +302,7 @@ def record_starting_program(method, val_data, run_id):
     )
     if result.get("status") != "ok":
         raise RuntimeError(f"Starting program failed: {result}")
+    signature = get_signature(result, val_data)
     record = {
         "method": method,
         "run_id": run_id,
@@ -277,6 +317,7 @@ def record_starting_program(method, val_data, run_id):
         "candidate_code": STARTING_PROGRAM,
         "extraction_error": None,
         "evaluation": result,
+        "signature": list(signature),
         "valid": True,
     }
     save_jsonl(OUTPUT_DIR / f"candidates_{run_id}.jsonl", record)
@@ -351,7 +392,10 @@ def run_method_b(val_data, run_id, budget_state):
 
     start = record_starting_program("B", val_data, run_id)
     valid_candidates = [{
-        "id": 0, "code": STARTING_PROGRAM, "score": start["evaluation"]["score"]
+        "id": 0,
+        "code": STARTING_PROGRAM,
+        "score": start["evaluation"]["score"],
+        "signature": tuple(start["signature"]),
     }]
     best_score = valid_candidates[0]["score"]
     cumulative_tokens = 0
@@ -387,6 +431,7 @@ def run_method_b(val_data, run_id, budget_state):
                 "id": generation,
                 "code": record["candidate_code"],
                 "score": score,
+                "signature": tuple(record["signature"]),
             })
             if score < best_score:
                 best_score = score
@@ -395,10 +440,15 @@ def run_method_b(val_data, run_id, budget_state):
                     record["candidate_code"], encoding="utf-8"
                 )
 
+        unique_signatures = len({
+            candidate["signature"] for candidate in valid_candidates
+        })
         print(
             f"Parents: {record['parent_ids']} | "
             f"Status: {record['evaluation'].get('status')} | "
-            f"Score: {format_value(score)} | Best: {format_value(best_score)}"
+            f"Score: {format_value(score)} | "
+            f"Best: {format_value(best_score)} | "
+            f"Unique signatures: {unique_signatures}"
         )
         if budget_state["stop"]:
             break
@@ -478,6 +528,10 @@ def local_test():
         print(name, result.get("status"), result.get("score"))
         if result.get("status") != "ok":
             raise RuntimeError(f"Local {name} test failed.")
+        signature = get_signature(result, val_data)
+        assert len(signature) == len(val_data)
+        assert all(math.isfinite(score) for score in signature)
+        print(f"{name}: signature length = {len(signature)}")
 
     print("\nLocal test passed!")
 
@@ -504,7 +558,7 @@ def main():
         local_test()
         return
 
-    val_data = load_dataset("val")
+    train_data = load_dataset("train")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     all_records = {}
@@ -518,13 +572,13 @@ def main():
     if args.method in ("A", "all"):
         run_id_a = f"pilot_A_{timestamp}"
         all_records["A"] = run_method_a(
-            val_data, run_id_a, budget_state
+            train_data, run_id_a, budget_state
         )
 
     if args.method in ("B", "all"):
         run_id_b = f"pilot_B_{timestamp}"
         all_records["B"] = run_method_b(
-            val_data, run_id_b, budget_state
+            train_data, run_id_b, budget_state
         )
 
     summary = {
