@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = ROOT / "outputs" / "pilot"
 BEST_DIR = OUTPUT_DIR / "best_candidates"
 
-NUM_CALLS = 50
+NUM_CALLS = 300
 TIMEOUT = 10.0
 BUDGET_USD = 15.0
 
@@ -206,7 +206,7 @@ def select_parents(valid_candidates, rng):
 # Candidate evaluation and logging
 # ============================================================
 
-def evaluate_and_record(method, generation, response, train_data,
+def evaluate_and_record(method, generation, response, val_data,
                         run_id, api_result, parents, cumulative_tokens):
     """parents: list of {"id", "code", "score"} shown in the prompt."""
     code, extraction_error = extract_candidate(response, len(parents))
@@ -239,7 +239,7 @@ def evaluate_and_record(method, generation, response, train_data,
         try:
             result = run_candidate(
                 source=code,
-                dataset=train_data,
+                dataset=val_data,
                 timeout=TIMEOUT,
             )
         except Exception as e:
@@ -256,10 +256,10 @@ def evaluate_and_record(method, generation, response, train_data,
     return record
 
 
-def record_starting_program(method, train_data, run_id):
+def record_starting_program(method, val_data, run_id):
     """Evaluate Best Fit and log it as generation 0."""
     result = run_candidate(
-        source=STARTING_PROGRAM, dataset=train_data, timeout=TIMEOUT
+        source=STARTING_PROGRAM, dataset=val_data, timeout=TIMEOUT
     )
     if result.get("status") != "ok":
         raise RuntimeError(f"Starting program failed: {result}")
@@ -287,11 +287,11 @@ def record_starting_program(method, train_data, run_id):
 # Method A: Independent sampling
 # ============================================================
 
-def run_method_a(train_data, run_id, budget_state):
+def run_method_a(val_data, run_id, budget_state):
     """Every call uses the same prompt: Best Fit as priority_fn_v0."""
     print("\nStarting Method A: Independent Sampling")
 
-    start = record_starting_program("A", train_data, run_id)
+    start = record_starting_program("A", val_data, run_id)
     starting_parent = {
         "id": 0, "code": STARTING_PROGRAM, "score": start["evaluation"]["score"]
     }
@@ -315,7 +315,7 @@ def run_method_a(train_data, run_id, budget_state):
         cumulative_tokens += api_result.get("total_tokens") or 0
 
         record = evaluate_and_record(
-            "A", generation, api_result.get("text"), train_data, run_id,
+            "A", generation, api_result.get("text"), val_data, run_id,
             api_result, [starting_parent], cumulative_tokens,
         )
         records.append(record)
@@ -342,14 +342,14 @@ def run_method_a(train_data, run_id, budget_state):
 # Method B: LLM-guided evolution
 # ============================================================
 
-def run_method_b(train_data, run_id, budget_state):
+def run_method_b(val_data, run_id, budget_state):
     """Each call: choose parents from the valid candidates, ask for the next
     version, and add the child to the valid candidates."""
     print("\nStarting Method B: LLM-Guided Evolution")
 
     rng = np.random.default_rng(RANDOM_SEED)
 
-    start = record_starting_program("B", train_data, run_id)
+    start = record_starting_program("B", val_data, run_id)
     valid_candidates = [{
         "id": 0, "code": STARTING_PROGRAM, "score": start["evaluation"]["score"]
     }]
@@ -376,7 +376,7 @@ def run_method_b(train_data, run_id, budget_state):
         cumulative_tokens += api_result.get("total_tokens") or 0
 
         record = evaluate_and_record(
-            "B", generation, api_result.get("text"), train_data, run_id,
+            "B", generation, api_result.get("text"), val_data, run_id,
             api_result, parents, cumulative_tokens,
         )
         records.append(record)
@@ -466,13 +466,13 @@ def make_summary(records):
 def local_test():
     print("Running local sandbox test. No API calls will be made.")
 
-    train_data = load_dataset("train")
+    val_data = load_dataset("val")
 
     for name, source in (("demo", DEMO_SOURCE),
                          ("starting program", STARTING_PROGRAM)):
         result = run_candidate(
             source=source,
-            dataset=train_data,
+            dataset=val_data,
             timeout=TIMEOUT,
         )
         print(name, result.get("status"), result.get("score"))
@@ -504,7 +504,7 @@ def main():
         local_test()
         return
 
-    train_data = load_dataset("train")
+    val_data = load_dataset("val")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     all_records = {}
@@ -518,13 +518,13 @@ def main():
     if args.method in ("A", "all"):
         run_id_a = f"pilot_A_{timestamp}"
         all_records["A"] = run_method_a(
-            train_data, run_id_a, budget_state
+            val_data, run_id_a, budget_state
         )
 
     if args.method in ("B", "all"):
         run_id_b = f"pilot_B_{timestamp}"
         all_records["B"] = run_method_b(
-            train_data, run_id_b, budget_state
+            val_data, run_id_b, budget_state
         )
 
     summary = {

@@ -1,0 +1,34 @@
+{
+  "A": {
+    "starting_program_score": 6.013387115884384,
+    "api_calls": 300,
+    "successful_api_calls": 300,
+    "valid_candidates": 288,
+    "invalid_or_timeout_candidates": 12,
+    "best_score": 6.013387115884384,
+    "mean_score": 7.099966909780289,
+    "total_api_cost_usd": 0.5661495,
+    "mean_api_cost_usd": 0.001887165,
+    "total_tokens": 324506,
+    "mean_tokens": 1081.6866666666667
+  },
+  "B": {
+    "starting_program_score": 6.013387115884384,
+    "api_calls": 300,
+    "successful_api_calls": 300,
+    "valid_candidates": 297,
+    "invalid_or_timeout_candidates": 3,
+    "best_score": 6.013387115884384,
+    "mean_score": 6.5483756133265,
+    "total_api_cost_usd": 0.658137,
+    "mean_api_cost_usd": 0.00219379,
+    "total_tokens": 455368,
+    "mean_tokens": 1517.8933333333334
+  },
+  "budget": {
+    "experiment_budget_usd": 15.0,
+    "actual_spending_usd": 1.224287,
+    "stopped_early": false,
+    "stop_reason": null
+  }
+}
