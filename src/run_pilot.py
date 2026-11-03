@@ -541,6 +541,8 @@ def local_test():
 # ============================================================
 
 def main():
+    global SELECTION_TEMPERATURE
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--local-test",
@@ -552,7 +554,23 @@ def main():
         choices=["A", "B", "all"],
         default="all",
     )
+    parser.add_argument(
+        "--selection-temperature",
+        type=float,
+        default=SELECTION_TEMPERATURE,
+        help=(
+            "Parent-selection temperature for Method B "
+            "(default: 0.1)."
+        ),
+    )
     args = parser.parse_args()
+
+    if (
+        not math.isfinite(args.selection_temperature)
+        or args.selection_temperature <= 0
+    ):
+        parser.error("--selection-temperature must be finite and positive")
+    SELECTION_TEMPERATURE = args.selection_temperature
 
     if args.local_test:
         local_test()
@@ -576,7 +594,7 @@ def main():
         )
 
     if args.method in ("B", "all"):
-        run_id_b = f"pilot_B_{timestamp}"
+        run_id_b = f"pilot_B_T{SELECTION_TEMPERATURE:g}_{timestamp}"
         all_records["B"] = run_method_b(
             train_data, run_id_b, budget_state
         )
@@ -584,6 +602,13 @@ def main():
     summary = {
         method: make_summary(records)
         for method, records in all_records.items()
+    }
+    summary["configuration"] = {
+        "selection_temperature": SELECTION_TEMPERATURE,
+        "functions_per_prompt": FUNCTIONS_PER_PROMPT,
+        "random_seed": RANDOM_SEED,
+        "signature": "per_instance_performance_score",
+        "dataset": "train",
     }
 
     summary["budget"] = {

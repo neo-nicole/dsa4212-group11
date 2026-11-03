@@ -276,6 +276,18 @@ Each call:
 - `DATASET`: `train` (training set for evolutionary feedback)
 - `BUDGET_USD`: 15.0 (shared experiment budget across both methods)
 
+The Method B selection temperature can be overridden from the command line:
+
+```bash
+python3 -m src.run_pilot --method B --selection-temperature 0.1
+python3 -m src.run_pilot --method B --selection-temperature 0.5
+python3 -m src.run_pilot --method B --selection-temperature 1.0
+```
+
+Each summary records the selected temperature and other experiment settings.
+The standalone `src.run_method_b` launcher uses the module default and does not
+accept this command-line override.
+
 ### Output files
 
 - `outputs/pilot/candidates_<run_id>.jsonl`: one line per candidate, starting with Best Fit (generation 0). Recorded fields include: API fields (tokens, cost, latency), evaluation result, ordered per-instance `signature`, `parent_ids`, `parent_scores` (% excess), `num_parents` and `cumulative_tokens`.
