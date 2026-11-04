@@ -306,7 +306,7 @@ python3 -m src.plot_pilot
 
 ## Final Evaluation (`src/final_eval.py`)
 
-Selects one heuristic from each experiment run, and compare it with our baselines (First Fit, Best Fit and tuned ab First Fit) on the test sets.
+Selects one heuristic from each experiment run, and compare it with our baselines (First Fit, Best Fit and tuned ab First Fit) on the in-distribution and out-of-distribution test sets.
 
 ### Running the evaluation
 
@@ -375,7 +375,7 @@ Create a file named `.env` in the project root (the same folder as `README.md`) 
 OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
-- `.env` is listed in `.gitignore` and should not be commited. 
+- `.env` is listed in `.gitignore` and should not be committed. 
 
 ### 3. Test the setup
 
