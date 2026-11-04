@@ -86,20 +86,16 @@ def get_actual_curve(candidates, window=20):
 
 def main():
     files = {
-        "Method A": sorted(PILOT_DIR.glob("candidates_pilot_A_*.jsonl")),
-        "Method B": sorted(PILOT_DIR.glob("candidates_pilot_B_*.jsonl")),
+        "Method A": PILOT_DIR / "candidates_pilot_A_20261104_140019.jsonl",
+        "Method B (T=0.1)": PILOT_DIR / "candidates_pilot_B_T0.1_20261104_142612.jsonl",
+        "Method B (T=0.5)": PILOT_DIR / "candidates_pilot_B_T0.5_20261104_145128.jsonl",
+        "Method B (T=1.0)": PILOT_DIR / "candidates_pilot_B_T1_20261104_152343.jsonl",
     }
 
-    for method, paths in files.items():
-        if len(paths) != 1:
-            raise RuntimeError(
-                f"Expected exactly one {method} pilot file, found {len(paths)}."
-            )
-
-    # Load both methods' candidate records.
+    # Load all four pilot runs.
     data = {
-        method: load_candidates(paths[0])
-        for method, paths in files.items()
+        method: load_candidates(path)
+        for method, path in files.items()
     }
 
     # GRAPH 1: Actual candidate scores + rolling average.

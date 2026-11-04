@@ -1,0 +1,28 @@
+{
+  "B": {
+    "starting_program_score": 5.90619132919229,
+    "api_calls": 300,
+    "successful_api_calls": 300,
+    "valid_candidates": 295,
+    "invalid_or_timeout_candidates": 5,
+    "best_score": 5.89955122295059,
+    "mean_score": 6.514970709374685,
+    "total_api_cost_usd": 1.04027475,
+    "mean_api_cost_usd": 0.0034675825,
+    "total_tokens": 677929,
+    "mean_tokens": 2259.7633333333333
+  },
+  "configuration": {
+    "selection_temperature": 0.5,
+    "functions_per_prompt": 2,
+    "random_seed": 0,
+    "signature": "per_instance_performance_score",
+    "dataset": "train"
+  },
+  "budget": {
+    "experiment_budget_usd": 15.0,
+    "actual_spending_usd": 1.040275,
+    "stopped_early": false,
+    "stop_reason": null
+  }
+}

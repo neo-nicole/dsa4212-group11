@@ -328,11 +328,11 @@ def record_starting_program(method, val_data, run_id):
 # Method A: Independent sampling
 # ============================================================
 
-def run_method_a(val_data, run_id, budget_state):
+def run_method_a(train_data, run_id, budget_state):
     """Every call uses the same prompt: Best Fit as priority_fn_v0."""
     print("\nStarting Method A: Independent Sampling")
 
-    start = record_starting_program("A", val_data, run_id)
+    start = record_starting_program("A", train_data, run_id)
     starting_parent = {
         "id": 0, "code": STARTING_PROGRAM, "score": start["evaluation"]["score"]
     }
@@ -356,7 +356,7 @@ def run_method_a(val_data, run_id, budget_state):
         cumulative_tokens += api_result.get("total_tokens") or 0
 
         record = evaluate_and_record(
-            "A", generation, api_result.get("text"), val_data, run_id,
+            "A", generation, api_result.get("text"), train_data, run_id,
             api_result, [starting_parent], cumulative_tokens,
         )
         records.append(record)
@@ -383,14 +383,14 @@ def run_method_a(val_data, run_id, budget_state):
 # Method B: LLM-guided evolution
 # ============================================================
 
-def run_method_b(val_data, run_id, budget_state):
+def run_method_b(train_data, run_id, budget_state):
     """Each call: choose parents from the valid candidates, ask for the next
     version, and add the child to the valid candidates."""
     print("\nStarting Method B: LLM-Guided Evolution")
 
     rng = np.random.default_rng(RANDOM_SEED)
 
-    start = record_starting_program("B", val_data, run_id)
+    start = record_starting_program("B", train_data, run_id)
     valid_candidates = [{
         "id": 0,
         "code": STARTING_PROGRAM,
@@ -420,7 +420,7 @@ def run_method_b(val_data, run_id, budget_state):
         cumulative_tokens += api_result.get("total_tokens") or 0
 
         record = evaluate_and_record(
-            "B", generation, api_result.get("text"), val_data, run_id,
+            "B", generation, api_result.get("text"), train_data, run_id,
             api_result, parents, cumulative_tokens,
         )
         records.append(record)
@@ -516,25 +516,32 @@ def make_summary(records):
 def local_test():
     print("Running local sandbox test. No API calls will be made.")
 
-    val_data = load_dataset("val")
+    for dataset_name in ("train", "val"):
+        dataset = load_dataset(dataset_name)
+        print(f"\nTesting on {dataset_name} dataset")
 
-    for name, source in (("demo", DEMO_SOURCE),
-                         ("starting program", STARTING_PROGRAM)):
-        result = run_candidate(
-            source=source,
-            dataset=val_data,
-            timeout=TIMEOUT,
-        )
-        print(name, result.get("status"), result.get("score"))
-        if result.get("status") != "ok":
-            raise RuntimeError(f"Local {name} test failed.")
-        signature = get_signature(result, val_data)
-        assert len(signature) == len(val_data)
-        assert all(math.isfinite(score) for score in signature)
-        print(f"{name}: signature length = {len(signature)}")
+        for name, source in (
+            ("demo", DEMO_SOURCE),
+            ("starting program", STARTING_PROGRAM),
+        ):
+            result = run_candidate(
+                source=source,
+                dataset=dataset,
+                timeout=TIMEOUT,
+            )
+
+            print(name, result.get("status"), result.get("score"))
+
+            if result.get("status") != "ok":
+                raise RuntimeError(f"Local {name} test failed on {dataset_name}.")
+
+            signature = get_signature(result, dataset)
+            assert len(signature) == len(dataset)
+            assert all(math.isfinite(score) for score in signature)
+
+            print(f"{name}: signature length = {len(signature)}")
 
     print("\nLocal test passed!")
-
 
 # ============================================================
 # Main
