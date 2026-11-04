@@ -304,6 +304,55 @@ After running the pilot, generate the performance plots from the saved candidate
 python3 -m src.plot_pilot
 ```
 
+## Final Evaluation (`src/final_eval.py`)
+
+Selects one heuristic from each experiment run, and compare it with our baselines (First Fit, Best Fit and tuned ab First Fit) on the in-distribution and out-of-distribution test sets.
+
+### Running the evaluation
+
+Put the candidate logs of all final runs in one folder, with the following naming convention:
+
+```
+candidates_<prefix>_A[_s<seed>]_<YYYYmmdd_HHMMSS>.jsonl
+candidates_<prefix>_B_T<temp>[_s<seed>]_<YYYYmmdd_HHMMSS>.jsonl
+```
+
+e.g. `outputs/final/candidates_final_A_s1_20261106_101500.jsonl`. Then run, from the project root:
+
+```bash
+python3 -m src.final_eval --runs-dir outputs/final --prefix final
+```
+
+- Every file in `--runs-dir` matching `candidates_<prefix>_*.jsonl` is evaluated
+- Runs are labelled `A_s1`, `A_s2`, `B_s1`, ... If a filename has no `_s<seed>` tag, repeats of the same method are numbered in timestamp order.
+- Note: Any crashed or test run saved in the folder with the same prefix is counted as an extra seed, move it out or rename it before running the evaluation script.
+- `--out-dir` sets where results are saved (default `outputs/final_eval/<prefix>`).
+- The token budget is applied by the run script, every log is assumed to have the same budget. Check the `tokens` column of the cost table to confirm this.
+
+### Selection of Candidates and Evaluation:
+
+1. **Selection (per run):** Valid candidates are taken from the log (Best Fit, generation 0, is included). Candidates using the same number of bins on every train instance are counted once (candidate generated the earliest is kept). The 5 best (by train score) are evaluated on validation set, and the one with the lowest validation score is selected. If nothing beat Best Fit, Best Fit itself is selected.
+2. **Testing:** The selected heuristics and the three baselines are evaluated on in-distribution test set (same distributions as training) and out-of-distribution test set (unseen distributions, sizes and orderings).
+3. **Execution time:** Each selected heuristic and Best Fit are timed in the sandbox over both test splits. The fastest of 3 repeats is kept.
+
+`TIMEOUT`=120s limits how long a heuristic may take on a whole split before the sandbox stops it. It is longer than the 10s used during the runs because out-of-distribution test includes larger instance sizes. A heuristic that fails or times out on a test split is reported and left out of the tables.
+
+### Outputs (in `--out-dir`)
+
+| File | Contents |
+|---|---|
+| `table_excess_by_family.csv` | Mean % excess over the lower bound, one row per test family, one column per heuristic (FF, BF, ABFF, each method's run) |
+| `table_bins_vs_bf.csv` | Bins vs Best Fit: total bins used (heuristic) - total bins used (Best Ftt) on the same instances (negative = hueristic uses fewer bins than Best Fit) |
+| `table_cost.csv` | Per run: selection temperature, LLM calls, invalid candidates, total tokens, USD, selected generation, execution time (ms per instance) and execution time relative to Best Fit |
+| `fig_bins_vs_bf.png` | Bins vs Best Fit per test family, one point per run. Families on the left of the dotted line are in-distribution test, those on the right are out-of-distribution test. |
+| `fig_best_so_far.png` | Best-so-far train score against cumulative tokens for every run |
+| `heuristics/<run>.py` | Code of the heuristic selected from each run |
+
+### Reading the results
+
+- **Bins vs Best Fit** compares a heuristic with Best Fit on the same instances. Generalisation is read by comparing it across the dotted line: an improvement over Best Fit for in-distribution test but not in out-of-distribution test indicates that it did not generalise.
+- Note: Bins vs Best Fit takes the total over a family's instances, and increases with instance size (uniform_1000 has about 10x the bins of uniform_100).
+
 ## Using the OpenRouter API Key and LLM Client
 
 The `src/llm_client.py` module sends prompts to the LLM through OpenRouter. It logs every call (tokens, cost, latency, prompt and response) and tracks spending against the key's budget.
@@ -326,7 +375,7 @@ Create a file named `.env` in the project root (the same folder as `README.md`) 
 OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
-- `.env` is listed in `.gitignore` and should not be commited. 
+- `.env` is listed in `.gitignore` and should not be committed. 
 
 ### 3. Test the setup
 
