@@ -4,50 +4,17 @@ import math
 from datetime import datetime
 from pathlib import Path
 
-import numpy as np
-
 try:
     from . import run_pilot as pilot
 except ImportError:
     import run_pilot as pilot
 
 from src.generate_instances import load_dataset
-from src.sandbox import run_candidate
 
 
 def save_json(path, obj):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(obj, indent=2, allow_nan=False), encoding="utf-8")
-
-
-def evaluate_code(code, dataset, timeout):
-    result = run_candidate(source=code, dataset=dataset, timeout=timeout)
-    if result.get("status") != "ok":
-        return {"status": result.get("status", "error"), "error": result.get("error")}
-    pilot.get_signature(result, dataset)  # Reject incomplete / malformed results.
-    return {"status": "ok", "score": result["score"]}
-
-
-def choose_on_validation(records, val_data, timeout):
-    """Select one candidate per run without looking at test performance."""
-    eligible = [r for r in records if r.get("valid") and r.get("candidate_code")]
-    evaluated = []
-    for record in eligible:
-        try:
-            result = evaluate_code(record["candidate_code"], val_data, timeout)
-        except Exception as exc:
-            result = {"status": "error", "error": str(exc)}
-        evaluated.append({
-            "generation": record["generation"],
-            "train_score": record["evaluation"]["score"],
-            "validation": result,
-        })
-    passing = [r for r in evaluated if r["validation"]["status"] == "ok"]
-    if not passing:
-        raise RuntimeError("No candidate passed validation, including Best Fit")
-    winner = min(passing, key=lambda r: (r["validation"]["score"], r["train_score"], r["generation"]))
-    chosen = next(r for r in eligible if r["generation"] == winner["generation"])
-    return chosen, evaluated, winner
 
 
 def install_token_limit(max_tokens):
@@ -63,7 +30,7 @@ def install_token_limit(max_tokens):
     def check(prompt, budget):
         if budget["stop"] or state["stop_reason"]:
             return False
-        # Conservative estimate of prompt tokens + maximum response tokens.
+        #estimate of prompt tokens + maximum response tokens.
         reserved = int(len(prompt.encode("utf-8")) * 1.25) + 1 + pilot.MAX_TOKENS
         if state["used"] + reserved > state["limit"]:
             state["stop_reason"] = "Insufficient remaining tokens for next request"
@@ -98,11 +65,12 @@ def main():
     parser.add_argument("--method", choices=("A", "B", "all"), default="all")
     parser.add_argument("--runs", type=int, default=5)
     parser.add_argument("--max-tokens", type=int, default=1_000_000, help="Independent cumulative token ceiling for each method in each repetition")
-    parser.add_argument("--budget", type=float, default=150.0, help="Total USD cap across all runs")
+    parser.add_argument("--budget", type=float, default=12.0, help="Total USD cap across all methods and repetitions (separate from llm_client account limit)")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--selection-temperature", type=float, default=0.1)
     parser.add_argument("--timeout", type=float, default=10.0)
-    parser.add_argument("--skip-test", action="store_true", help="Keep test untouched until final evaluation")
+    parser.add_argument("--prefix", default="final", help="Filename prefix expected by src.final_eval (default: final)")
+    parser.add_argument("--out-dir", type=Path, default=Path("outputs/final"), help="Folder containing candidate logs for src.final_eval")
     args = parser.parse_args()
     if args.runs < 1 or args.max_tokens < 1 or args.budget <= 0 or args.timeout <= 0:
         parser.error("runs, max-tokens, budget and timeout must be positive")
@@ -111,13 +79,14 @@ def main():
     if not math.isfinite(args.selection_temperature) or args.selection_temperature <= 0:
         parser.error("selection temperature must be finite and positive")
 
+    if not args.prefix or not args.prefix.replace("-", "").isalnum():
+        parser.error("--prefix must contain only letters, digits or hyphens")
+
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output = pilot.ROOT / "outputs" / "experiment" / stamp
-    output.mkdir(parents=True, exist_ok=False)
+    output = args.out_dir if args.out_dir.is_absolute() else pilot.ROOT / args.out_dir
+    output.mkdir(parents=True, exist_ok=True)
     pilot.OUTPUT_DIR = output
     pilot.BEST_DIR = output / "best_candidates"
-    # Pilot loops require an iteration bound; the token guard, not this bound,
-    # is the practical stopping criterion. Each request consumes >=1 token.
     pilot.NUM_CALLS = args.max_tokens
     token_state = install_token_limit(args.max_tokens)
     pilot.BUDGET_USD = args.budget
@@ -125,76 +94,53 @@ def main():
     pilot.SELECTION_TEMPERATURE = args.selection_temperature
 
     train_data = load_dataset("train")
-    val_data = load_dataset("val")
     methods = ["A", "B"] if args.method == "all" else [args.method]
     budget = {"spent": 0.0, "stop": False, "reason": None}
     rows = []
-    selected = []
     config = vars(args).copy()
-    config.update({"search_dataset": "train", "selection_dataset": "val", "test_dataset": None if args.skip_test else "test", "model": pilot.MODEL})
-    save_json(output / "config.json", config)
+    config.update({"search_dataset": "train", "selection_and_testing": "src.final_eval", "model": pilot.MODEL, "request_max_output_tokens": pilot.MAX_TOKENS, "token_budget_scope": "per_method_per_repetition"})
+    save_json(output / f"{args.prefix}_config_{stamp}.json", config)
 
     for repetition in range(args.runs):
         for method in methods:
             if budget["stop"]:
                 break
             reset_run_token_state(token_state)
-            # Method B uses a separate, reproducible RNG stream per repetition.
             pilot.RANDOM_SEED = args.seed + repetition
-            run_id = f"{method}_rep{repetition + 1:02d}_{stamp}"
+            seed = args.seed + repetition
+            label = (f"{method}_T{args.selection_temperature:g}" if method == "B" else method)
+            run_id = f"{args.prefix}_{label}_s{seed}_{stamp}"
             print(f"\n===== {run_id} =====")
             records = (pilot.run_method_a if method == "A" else pilot.run_method_b)(train_data, run_id, budget)
             summary = pilot.make_summary(records)
             summary["run_tokens"] = token_state["used"]
             summary["token_limit"] = args.max_tokens
             summary["token_stop_reason"] = token_state["stop_reason"]
-            chosen, validation_results, winner = choose_on_validation(records, val_data, args.timeout)
-            selected_path = output / "selected" / f"{run_id}.py"
-            selected_path.parent.mkdir(parents=True, exist_ok=True)
-            selected_path.write_text(chosen["candidate_code"], encoding="utf-8")
-            save_json(output / f"validation_{run_id}.json", validation_results)
             row = {
                 "method": method, "repetition": repetition + 1,
-                "seed": args.seed + repetition, "run_id": run_id,
+                "seed": seed, "run_id": run_id,
                 **summary,
-                "selected_generation": winner["generation"],
-                "selected_train_score": winner["train_score"],
-                "selected_validation_score": winner["validation"]["score"],
-                "selected_program": str(selected_path.relative_to(output)),
             }
             rows.append(row)
-            selected.append((row, chosen["candidate_code"]))
-            save_json(output / "run_summaries.json", rows)
+            save_json(output / f"{args.prefix}_run_summaries_{stamp}.json", rows)
         if budget["stop"]:
             break
-
-    #only evaluate the already-frozen selections on test; never reselect using test.
-    if not args.skip_test:
-        test_data = load_dataset("test")
-        for row, code in selected:
-            try:
-                row["test_evaluation"] = evaluate_code(code, test_data, args.timeout)
-            except Exception as exc:
-                row["test_evaluation"] = {"status": "error", "error": str(exc)}
 
     aggregate = {}
     for method in methods:
         subset = [r for r in rows if r["method"] == method]
-        test_scores = [r["test_evaluation"]["score"] for r in subset if r.get("test_evaluation", {}).get("status") == "ok"]
         aggregate[method] = {
             "completed_runs": len(subset),
-            "mean_validation_score": float(np.mean([r["selected_validation_score"] for r in subset])) if subset else None,
-            "mean_test_score": float(np.mean(test_scores)) if test_scores else None,
-            "std_test_score": float(np.std(test_scores, ddof=1)) if len(test_scores) > 1 else None,
             "total_api_calls": sum(r["api_calls"] for r in subset),
             "total_tokens": sum(r["run_tokens"] for r in subset),
             "total_api_cost_usd": sum(r["total_api_cost_usd"] for r in subset),
         }
     report = {"configuration": config, "budget": budget, "aggregate": aggregate, "runs": rows}
-    save_json(output / "final_summary.json", report)
+    save_json(output / f"{args.prefix}_experiment_summary_{stamp}.json", report)
     print("\n===== EXPERIMENT SUMMARY =====")
     print(json.dumps({"budget": budget, "aggregate": aggregate}, indent=2))
-    print(f"\nResults saved to {output}")
+    print(f"\nCandidate logs saved to {output}")
+    print(f"After all runs, execute: python -m src.final_eval --runs-dir {output} --prefix {args.prefix}")
 
 
 if __name__ == "__main__":
