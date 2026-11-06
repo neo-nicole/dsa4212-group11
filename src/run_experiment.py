@@ -168,7 +168,7 @@ def main():
         if budget["stop"]:
             break
 
-    # Only evaluate the already-frozen selections on test; never reselect using test.
+    #only evaluate the already-frozen selections on test; never reselect using test.
     if not args.skip_test:
         test_data = load_dataset("test")
         for row, code in selected:
