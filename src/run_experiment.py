@@ -51,56 +51,53 @@ def choose_on_validation(records, val_data, timeout):
 
 
 def install_token_limit(max_tokens):
-    """Apply a per-run token ceiling to the existing pilot search loops.
+    """Enforce an independent token allowance for each method/repetition.
 
-    Actual token usage is read from the API response. Before each request we
-    conservatively reserve the maximum output plus an input-token estimate.
+    The pilot search loops call these wrappers. A token stop is local to the
+    current run; only the USD/credit/API-safety guard can stop all runs.
     """
     original_check = pilot.can_make_request
     original_update = pilot.update_budget_after_call
-    state = {"used": 0, "limit": max_tokens}
+    state = {"used": 0, "limit": max_tokens, "stop_reason": None}
 
     def check(prompt, budget):
-        if budget["stop"]:
+        if budget["stop"] or state["stop_reason"]:
             return False
-        # Match the conservative input estimate used in run_pilot.py.
+        # Conservative estimate of prompt tokens + maximum response tokens.
         reserved = int(len(prompt.encode("utf-8")) * 1.25) + 1 + pilot.MAX_TOKENS
         if state["used"] + reserved > state["limit"]:
-            budget["stop"] = True
-            budget["reason"] = "Per-run token limit reached (insufficient reserve for next request)."
-            print(f"Stopping run: {budget['reason']} Used {state['used']:,}/{state['limit']:,} tokens.")
+            state["stop_reason"] = "Insufficient remaining tokens for next request"
+            print(f"Stopping this method/repetition: {state['stop_reason']}. "
+                  f"Used {state['used']:,}/{state['limit']:,} tokens.")
             return False
         return original_check(prompt, budget)
 
     def update(result, budget):
         original_update(result, budget)
         usage = result.get("total_tokens")
-        if usage is None:
+        if isinstance(usage, bool) or not isinstance(usage, (int, float)) or not math.isfinite(usage) or usage < 0:
             budget["stop"] = True
-            budget["reason"] = "API token usage unavailable; cannot enforce token limit."
+            budget["reason"] = "API token usage unavailable or invalid; cannot enforce token limit."
             return
         state["used"] += int(usage)
         if state["used"] >= state["limit"]:
-            budget["stop"] = True
-            budget["reason"] = "Per-run token limit reached."
+            state["stop_reason"] = "Token limit reached"
 
     pilot.can_make_request = check
     pilot.update_budget_after_call = update
     return state
 
 
-def reset_run_token_state(state, budget):
+def reset_run_token_state(state):
     state["used"] = 0
-    if budget["stop"] and budget["reason"] and budget["reason"].startswith("Per-run token limit"):
-        budget["stop"] = False
-        budget["reason"] = None
+    state["stop_reason"] = None
 
 
 def main():
     parser = argparse.ArgumentParser(description="Repeated main experiment for Methods A and B")
     parser.add_argument("--method", choices=("A", "B", "all"), default="all")
     parser.add_argument("--runs", type=int, default=5)
-    parser.add_argument("--max-tokens", type=int, default=1_000_000, help="Maximum cumulative prompt + completion tokens per method per run")
+    parser.add_argument("--max-tokens", type=int, default=1_000_000, help="Independent cumulative token ceiling for each method in each repetition")
     parser.add_argument("--budget", type=float, default=150.0, help="Total USD cap across all runs")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--selection-temperature", type=float, default=0.1)
@@ -141,7 +138,7 @@ def main():
         for method in methods:
             if budget["stop"]:
                 break
-            reset_run_token_state(token_state, budget)
+            reset_run_token_state(token_state)
             # Method B uses a separate, reproducible RNG stream per repetition.
             pilot.RANDOM_SEED = args.seed + repetition
             run_id = f"{method}_rep{repetition + 1:02d}_{stamp}"
@@ -150,6 +147,7 @@ def main():
             summary = pilot.make_summary(records)
             summary["run_tokens"] = token_state["used"]
             summary["token_limit"] = args.max_tokens
+            summary["token_stop_reason"] = token_state["stop_reason"]
             chosen, validation_results, winner = choose_on_validation(records, val_data, args.timeout)
             selected_path = output / "selected" / f"{run_id}.py"
             selected_path.parent.mkdir(parents=True, exist_ok=True)
@@ -167,10 +165,6 @@ def main():
             rows.append(row)
             selected.append((row, chosen["candidate_code"]))
             save_json(output / "run_summaries.json", rows)
-            # A token-limit stop applies only to this run, not later runs.
-            if budget["reason"] and budget["reason"].startswith("Per-run token limit"):
-                budget["stop"] = False
-                budget["reason"] = None
         if budget["stop"]:
             break
 
