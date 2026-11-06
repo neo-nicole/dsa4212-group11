@@ -482,3 +482,117 @@ Every call appends one JSON line to `outputs/llm_logs/<run_id>.jsonl`, including
 - Use `total_tokens` (not only `completion_tokens`) for the token budget: Method B's extra cost comes mostly from longer prompts.
 - Do not commit a log file while its run is still writing to it.
 - The API key is sent only in request headers and is never written to the logs.
+
+## Main Experiment (`src/run_experiment.py`)
+
+The `src/run_experiment.py` script runs Method A (independent sampling) and Method B (LLM-guided evolution) under the same token budget.
+
+Both methods start from Best Fit and generate candidate heuristics evaluated on the training set. Unlike the pilot, which uses a fixed number of API calls, the main experiment uses a **maximum cumulative token budget** as its stopping criterion.
+
+### 1. Experiment settings
+
+| Setting | Value | Description |
+|---|---|---|
+| Methods | A and B | Run both methods |
+| Runs | 2 | Two independent repetitions per method |
+| Seeds | 1, 2 | Seed used for Method B's parent selection |
+| Max tokens | 500,000 | Maximum cumulative tokens per method per run |
+| Starting program | Best Fit | Generation 0, no API cost |
+| Training dataset | `train` | Used to evaluate generated candidates |
+| Selection temperature | 0.1 | Method B's parent-selection temperature |
+| Timeout | 10 seconds | Maximum sandbox evaluation time per candidate |
+| USD budget | $12 | Shared spending safety limit across all runs |
+
+Each method receives its own 500,000-token budget for each seed. Therefore, the total maximum token allowance across the four runs is 2,000,000 tokens.
+
+### 2. Run the main experiment
+
+From the project root:
+
+```bash
+python -m src.run_experiment --seed 1 --max-tokens 500000 --runs 2
+```
+
+This executes four runs:
+
+1. Method A — Seed 1
+2. Method B — Seed 1
+3. Method A — Seed 2
+4. Method B — Seed 2
+
+The seed is incremented automatically for each repetition (`seed + repetition`). For Method B, the seed controls the random sampling of parent candidates. It does not guarantee deterministic LLM responses.
+
+To run only one method, specify `--method A` or `--method B`.
+
+### 3. Stopping criteria
+
+Each run stops when there are insufficient remaining tokens to safely make another API request.
+
+Token usage is calculated as:
+
+```text
+total_tokens = prompt_tokens + completion_tokens
+```
+
+Completion tokens include reported reasoning tokens.
+
+Before each request, the script conservatively estimates the input tokens and reserves the maximum output tokens configured in `llm_client.py` (`MAX_TOKENS = 2000`).
+
+Consequently, actual token consumption may be slightly below 500,000.
+
+The USD budget is shared across all four runs. If the spending limit is reached or the remaining OpenRouter credit is insufficient, the experiment stops early.
+
+### 4. Output files
+
+Candidate logs and experiment summaries are saved to `outputs/final/`.
+
+```text
+outputs/final/
+├── candidates_final_A_s1_<timestamp>.jsonl
+├── candidates_final_B_T0.1_s1_<timestamp>.jsonl
+├── candidates_final_A_s2_<timestamp>.jsonl
+├── candidates_final_B_T0.1_s2_<timestamp>.jsonl
+├── final_config_<timestamp>.json
+├── final_run_summaries_<timestamp>.json
+└── final_experiment_summary_<timestamp>.json
+```
+
+Each candidate JSONL file contains Best Fit (generation 0) and all generated candidates, including invalid candidates.
+
+Recorded information includes:
+
+- Generation number and parent IDs
+- Candidate source code and validity status
+- Training evaluation score and per-instance performance signature
+- Cumulative input and output tokens
+- API cost and latency
+
+Individual API requests are also logged in `outputs/llm_logs/<run_id>.jsonl`, including the full prompt and LLM response.
+
+The experiment summary records the number of API calls, valid and invalid candidates, total tokens, USD spending, and stopping reason for each run.
+
+### 5. Final evaluation
+
+`run_experiment.py` only generates and evaluates candidates on the training set. It does not select final heuristics or evaluate them on the test sets.
+
+After both seeds finish, run:
+
+```bash
+python -m src.final_eval --runs-dir outputs/final --prefix final
+```
+
+The final evaluation script:
+
+1. Removes candidates with duplicate training bin-count behaviour, keeping the earliest.
+2. Shortlists the five best candidates by training score, including Best Fit.
+3. Selects the candidate with the lowest validation score.
+4. Evaluates selected heuristics and baselines on `in-test` and `out-test`.
+5. Generates performance tables, cost comparisons, execution-time measurements, and plots.
+
+Results are saved to:
+
+```text
+outputs/final_eval/final/
+```
+
+**Note:** Ensure `outputs/final/` contains only the intended completed experiment runs before executing final evaluation. Any additional matching candidate logs will also be included.
