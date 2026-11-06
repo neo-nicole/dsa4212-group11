@@ -1,0 +1,16 @@
+{
+  "method": "all",
+  "runs": 1,
+  "max_tokens": 500000,
+  "budget": 12.0,
+  "seed": 1,
+  "selection_temperature": 0.1,
+  "timeout": 10.0,
+  "prefix": "final",
+  "out_dir": "outputs\\final",
+  "search_dataset": "train",
+  "selection_and_testing": "src.final_eval",
+  "model": "google/gemini-3.8-flash",
+  "request_max_output_tokens": 2000,
+  "token_budget_scope": "per_method_per_repetition"
+}
