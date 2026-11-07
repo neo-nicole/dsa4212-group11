@@ -1,0 +1,81 @@
+{
+  "configuration": {
+    "method": "all",
+    "runs": 1,
+    "max_tokens": 500000,
+    "budget": 12.0,
+    "seed": 2,
+    "selection_temperature": 1,
+    "timeout": 10.0,
+    "prefix": "final",
+    "out_dir": "outputs/final",
+    "search_dataset": "train",
+    "selection_and_testing": "src.final_eval",
+    "model": "google/gemini-3.8-flash",
+    "request_max_output_tokens": 2000,
+    "token_budget_scope": "per_method_per_repetition"
+  },
+  "budget": {
+    "spent": 1.5291480000000002,
+    "stop": false,
+    "reason": null
+  },
+  "aggregate": {
+    "A": {
+      "completed_runs": 1,
+      "total_api_calls": 484,
+      "total_tokens": 494830,
+      "total_api_cost_usd": 0.8058045
+    },
+    "B": {
+      "completed_runs": 1,
+      "total_api_calls": 261,
+      "total_tokens": 492034,
+      "total_api_cost_usd": 0.7233435
+    }
+  },
+  "runs": [
+    {
+      "method": "A",
+      "repetition": 1,
+      "seed": 2,
+      "run_id": "final_A_s2_20261107_124621",
+      "starting_program_score": 5.90619132919229,
+      "api_calls": 484,
+      "successful_api_calls": 484,
+      "valid_candidates": 481,
+      "invalid_or_timeout_candidates": 3,
+      "best_score": 5.90462801750107,
+      "mean_score": 6.943102687428941,
+      "total_api_cost_usd": 0.8058045,
+      "mean_api_cost_usd": 0.0016648853305785123,
+      "total_tokens": 494830,
+      "mean_tokens": 1022.3760330578513,
+      "run_tokens": 494830,
+      "run_api_calls": 484,
+      "token_limit": 500000,
+      "token_stop_reason": "Insufficient remaining tokens for next request"
+    },
+    {
+      "method": "B",
+      "repetition": 1,
+      "seed": 2,
+      "run_id": "final_B_T1_s2_20261107_124621",
+      "starting_program_score": 5.90619132919229,
+      "api_calls": 261,
+      "successful_api_calls": 261,
+      "valid_candidates": 230,
+      "invalid_or_timeout_candidates": 31,
+      "best_score": 5.90619132919229,
+      "mean_score": 6.822430423233501,
+      "total_api_cost_usd": 0.7233435,
+      "mean_api_cost_usd": 0.0027714310344827586,
+      "total_tokens": 492034,
+      "mean_tokens": 1885.1877394636015,
+      "run_tokens": 492034,
+      "run_api_calls": 261,
+      "token_limit": 500000,
+      "token_stop_reason": "Insufficient remaining tokens for next request"
+    }
+  ]
+}
