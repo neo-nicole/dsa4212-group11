@@ -276,5 +276,158 @@ def main():
     print(f"\nSaved to {out_dir}")
 
 
-if __name__ == "__main__":
+#addtional analysis
+def add_search_analysis(runs, out_dir):
+    """Analyse generated candidates without evaluating test data again."""
+    import numpy as np
+
+    out_dir = Path(out_dir)
+    rows = []
+    for run in runs:
+        for record in run["records"]:
+            if record.get("generation", 0) == 0:
+                continue
+            evaluation = record.get("evaluation") or {}
+            score = evaluation.get("score") if record.get("valid") else None
+            rows.append({
+                "run": run["label"],
+                "method": run["method"],
+                "seed": run["seed"],
+                "generation": record.get("generation"),
+                "cumulative_tokens": record.get("cumulative_tokens"),
+                "score": score,
+                "valid": bool(record.get("valid")),
+                "api_cost_usd": record.get("api_cost"),
+                "prompt_tokens": record.get("prompt_tokens"),
+                "completion_tokens": record.get("completion_tokens"),
+            })
+    df = pd.DataFrame(rows)
+    if df.empty:
+        print("No generated candidates found for additional analysis.")
+        return
+    df.to_csv(out_dir / "table_candidate_search.csv", index=False)
+
+    valid = df.loc[df["valid"] & df["score"].notna()].copy()
+    if not valid.empty:
+        # Actual generated scores (not just best-so-far) and rolling mean.
+        fig, ax = plt.subplots(figsize=(10, 5.5))
+        for run_name, group in valid.groupby("run", sort=True):
+            group = group.sort_values("generation")
+            method = group["method"].iloc[0]
+            color = COLORS[method]
+            ax.scatter(group["cumulative_tokens"], group["score"],
+                       color=color, s=9, alpha=0.12)
+            rolling = group["score"].rolling(window=20, min_periods=5).mean()
+            ax.plot(group["cumulative_tokens"], rolling, color=color,
+                    linewidth=1.6, alpha=0.8, label=run_name)
+        ax.set(xlabel="Cumulative tokens", ylabel="Candidate train score (% excess; lower is better)",
+               title="Generated candidate quality and 20-valid-candidate rolling mean")
+        ax.grid(alpha=0.2)
+        ax.legend(fontsize=8, ncol=2)
+        fig.tight_layout()
+        fig.savefig(out_dir / "fig_candidate_scores_vs_tokens.png", dpi=300)
+        plt.close(fig)
+
+        # Candidate score distributions, excluding generation 0.
+        fig, ax = plt.subplots(figsize=(7.5, 5))
+        methods = [m for m in ("A", "B") if m in set(valid["method"])]
+        series = [valid.loc[valid["method"] == m, "score"].to_numpy() for m in methods]
+        ax.boxplot(series, labels=[f"Method {m}" for m in methods],
+                   showfliers=False, showmeans=True)
+        ax.set(ylabel="Candidate train score (% excess; lower is better)",
+               title="Distribution of valid generated candidate scores")
+        ax.grid(axis="y", alpha=0.2)
+        fig.tight_layout()
+        fig.savefig(out_dir / "fig_candidate_score_distribution.png", dpi=300)
+        plt.close(fig)
+
+    # Per-run summary; do not confuse pooled candidate means with across-seed means.
+    summary = []
+    for name, group in df.groupby("run", sort=True):
+        good = group.loc[group["valid"] & group["score"].notna()]
+        summary.append({
+            "run": name,
+            "method": group["method"].iloc[0],
+            "seed": group["seed"].iloc[0],
+            "api_calls": len(group),
+            "valid_candidates": len(good),
+            "invalid_candidates": len(group) - len(good),
+            "validity_rate": len(good) / len(group),
+            "mean_generated_train_score": good["score"].mean() if len(good) else np.nan,
+            "best_generated_train_score": good["score"].min() if len(good) else np.nan,
+            "tokens_used": group["cumulative_tokens"].max(),
+            "api_cost_usd": group["api_cost_usd"].sum(),
+        })
+    summary_df = pd.DataFrame(summary)
+    summary_df.to_csv(out_dir / "table_search_summary_by_run.csv", index=False)
+
+    # Run-level comparison of mean score and validity rate.
+    fig, ax = plt.subplots(figsize=(9, 5))
+    for method, group in summary_df.groupby("method"):
+        ax.scatter(group["tokens_used"], group["mean_generated_train_score"],
+                   label=f"Method {method}", color=COLORS[method], s=65)
+        for _, row in group.iterrows():
+            ax.annotate(str(row["run"]),
+                        (row["tokens_used"], row["mean_generated_train_score"]),
+                        xytext=(4, 4), textcoords="offset points", fontsize=8)
+    ax.set(xlabel="Tokens consumed per run", ylabel="Mean generated train score (% excess)",
+           title="Mean candidate quality by run (lower is better)")
+    ax.grid(alpha=0.2)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(out_dir / "fig_mean_candidate_score_by_run.png", dpi=300)
+    plt.close(fig)
+
+
+def add_generalisation_heatmap(out_dir):
+    """Visualise the existing test table; no change to test evaluation."""
+    import numpy as np
+    out_dir = Path(out_dir)
+    path = out_dir / "table_bins_vs_bestfit.csv"
+    if not path.exists():
+        return
+    frame = pd.read_csv(path, index_col=[0, 1])
+    if frame.empty:
+        return
+    values = frame.to_numpy(dtype=float).T
+    # Symmetric logarithmic transform preserves signs and shows zero clearly.
+    transformed = np.sign(values) * np.log10(1 + np.abs(values))
+    fig, ax = plt.subplots(figsize=(max(10, len(frame) * 1.1), max(4, len(frame.columns) * 0.6)))
+    vmax = max(1.0, float(np.nanmax(np.abs(transformed))))
+    im = ax.imshow(transformed, cmap="RdBu_r", vmin=-vmax, vmax=vmax, aspect="auto")
+    ax.set_xticks(range(len(frame)))
+    ax.set_xticklabels([f"{split}: {family}" for split, family in frame.index],
+                       rotation=40, ha="right", fontsize=8)
+    ax.set_yticks(range(len(frame.columns)))
+    ax.set_yticklabels(frame.columns)
+    for i in range(len(frame.columns)):
+        for j in range(len(frame)):
+            val = values[i, j]
+            ax.text(j, i, f"{val:g}" if np.isfinite(val) else "NA",
+                    ha="center", va="center", fontsize=8,
+                    color="white" if abs(transformed[i, j]) > vmax * 0.55 else "black")
+    ax.set_title("Total bins relative to Best Fit (negative = better)")
+    cb = fig.colorbar(im, ax=ax, shrink=0.8)
+    cb.set_label("Signed log10(1 + absolute bin difference)")
+    fig.tight_layout()
+    fig.savefig(out_dir / "fig_bins_vs_bf_heatmap.png", dpi=300)
+    plt.close(fig)
+
+
+def enhanced_main():
+    """Run the original final evaluation, then produce additional analysis."""
+    # Parse the same arguments solely to locate the original inputs/outputs.
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--runs-dir", default=str(ROOT / "outputs" / "final"))
+    parser.add_argument("--prefix", default="final")
+    parser.add_argument("--out-dir", default=None)
+    args, _ = parser.parse_known_args()
     main()
+    runs = find_runs(args.runs_dir, args.prefix)
+    out_dir = Path(args.out_dir or ROOT / "outputs" / "final_eval" / args.prefix)
+    add_search_analysis(runs, out_dir)
+    add_generalisation_heatmap(out_dir)
+    print(f"Additional analysis saved to {out_dir}")
+
+if __name__ == "__main__":
+    enhanced_main()

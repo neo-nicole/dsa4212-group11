@@ -1,0 +1,5 @@
+run,selection_temperature,calls,invalid,tokens,usd,selected_generation,ms_per_instance,time_vs_bf
+A_s1,,479,8,494167,0.8142,0,13.661,0.95
+A_s2,,484,3,494830,0.8058,0,14.397,1.0
+B_T1_s1,1,267,0,492238,0.7208,0,12.508,0.87
+B_T1_s2,1,261,31,492034,0.7233,0,13.484,0.94
