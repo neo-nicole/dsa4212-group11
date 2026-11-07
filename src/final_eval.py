@@ -72,8 +72,10 @@ def find_runs(runs_dir, prefix):
         )
     count = {}
     for r in sorted(runs, key=lambda r: r["timestamp"]):
-        count[r["method"]] = count.get(r["method"], 0) + 1
-        r["label"] = f"{r['method']}_s{r['seed'] or count[r['method']]}"
+        # Same naming as run_experiment: A, or B_T<temp> for Method B
+        group = f"{r['method']}_T{r['temp']}" if r["temp"] else r["method"]
+        count[group] = count.get(group, 0) + 1
+        r["label"] = f"{group}_s{r['seed'] or count[group]}"
     return sorted(runs, key=lambda r: r["label"])
 
 
@@ -210,7 +212,7 @@ def main():
     ]
     shown = set()
     for label, color, marker, offset in series:
-        name = "ABFF (tuned baseline)" if label == "ABFF" else f"Method {label[0]}"
+        name = "ABFF (tuned baseline)" if label == "ABFF" else f"Method {label.rsplit('_s', 1)[0]}"
         ax.scatter(
             [i + offset for i in x],
             delta[label],

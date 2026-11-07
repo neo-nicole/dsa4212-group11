@@ -324,7 +324,7 @@ python3 -m src.final_eval --runs-dir outputs/final --prefix final
 ```
 
 - Every file in `--runs-dir` matching `candidates_<prefix>_*.jsonl` is evaluated
-- Runs are labelled `A_s1`, `A_s2`, `B_s1`, ... If a filename has no `_s<seed>` tag, repeats of the same method are numbered in timestamp order.
+- Runs are labelled `A_s1`, `A_s2`, `B_T1_s1`, ... If a filename has no `_s<seed>` tag, repeats of the same method are numbered in timestamp order.
 - Note: Any crashed or test run saved in the folder with the same prefix is counted as an extra seed, move it out or rename it before running the evaluation script.
 - `--out-dir` sets where results are saved (default `outputs/final_eval/<prefix>`).
 - The token budget is applied by the run script, every log is assumed to have the same budget. Check the `tokens` column of the cost table to confirm this.
