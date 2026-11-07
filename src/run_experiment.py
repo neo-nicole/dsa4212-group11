@@ -76,7 +76,7 @@ def main():
     parser.add_argument("--max-tokens", type=int, default=1_000_000, help="Independent cumulative token ceiling for each method in each repetition")
     parser.add_argument("--budget", type=float, default=12.0, help="Total USD cap across all methods and repetitions (separate from llm_client account limit)")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--selection-temperature", type=float, default=0.1)
+    parser.add_argument("--selection-temperature", type=float, default=1)
     parser.add_argument("--timeout", type=float, default=10.0)
     parser.add_argument("--prefix", default="final", help="Filename prefix expected by src.final_eval (default: final)")
     parser.add_argument("--out-dir", type=Path, default=Path("outputs/final"), help="Folder containing candidate logs for src.final_eval")
