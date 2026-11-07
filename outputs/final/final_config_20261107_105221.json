@@ -4,7 +4,7 @@
   "max_tokens": 500000,
   "budget": 12.0,
   "seed": 1,
-  "selection_temperature": 0.1,
+  "selection_temperature": 1,
   "timeout": 10.0,
   "prefix": "final",
   "out_dir": "outputs\\final",
