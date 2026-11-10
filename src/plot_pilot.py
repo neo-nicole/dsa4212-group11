@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PILOT_DIR = ROOT / "outputs" / "pilot"
+PILOT_DIR = ROOT / "outputs" / "pilot_2"
 OUTPUT_FILE = PILOT_DIR / "pilot_curves.png"
 
 
