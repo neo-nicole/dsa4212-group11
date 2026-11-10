@@ -21,9 +21,9 @@ Only the LLM runs need an API key. Create a `.env` file in the project root (whi
 OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
-Check the key with `python3 -m src.llm_client`.
+Check the key with `python -m src.llm_client`.
 
-Run every script as a module **from the project root**, e.g. `python3 -m src.final_eval`.
+Run every script as a module **from the project root**, e.g. `python -m src.final_eval`.
 
 ## Repository structure
 
@@ -53,7 +53,7 @@ Folders named `original_data` or `final_data_before_in_test` are from earlier it
 
 ## Data
 
-All instances have bin capacity 100 and integer item sizes, generated with fixed seeds (`python3 -m src.generate_instances`).
+All instances have bin capacity 100 and integer item sizes, generated with fixed seeds (`python -m src.generate_instances`).
 
 | Split | Families | Use |
 |---|---|---|
@@ -87,21 +87,21 @@ print(evaluate(best_fit, "train")["score"])
 LLM-generated code is run through the sandbox (separate process, timeout, no imports):
 
 ```bash
-python3 -m src.sandbox --candidate candidate.py --split train --timeout 10
+python -m src.sandbox --candidate candidate.py --split train --timeout 10
 ```
 
 ## Reproducing the results
 
 ```bash
-python3 -m src.ab_tuning              # tune ABFF -> outputs/final_data/ab_params.json
-python3 -m src.compare_baselines      # baseline results
+python -m src.ab_tuning              # tune ABFF -> outputs/final_data/ab_params.json
+python -m src.compare_baselines      # baseline results
 
 # main experiment (needs API key): 2 runs, 500k tokens per method, T = 1
-python3 -m src.run_experiment --runs 1 --seed 1 --max-tokens 500000 --selection-temperature 1
-python3 -m src.run_experiment --runs 1 --seed 2 --max-tokens 500000 --selection-temperature 1
+python -m src.run_experiment --runs 1 --seed 1 --max-tokens 500000 --selection-temperature 1
+python -m src.run_experiment --runs 1 --seed 2 --max-tokens 500000 --selection-temperature 1
 
 # selection and test evaluation -> outputs/final_eval/final/
-python3 -m src.final_eval --runs-dir outputs/final_experiment --prefix final
+python -m src.final_eval --runs-dir outputs/final_experiment --prefix final
 ```
 
 LLM outputs are not deterministic. To reproduce the reported tables and figures exactly, run only the last command on the committed logs in `outputs/final_experiment/`.
