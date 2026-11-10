@@ -1,8 +1,0 @@
-family,num_instances,pct_any_diff,pct_ff_bf_diff,pct_bf_ab_diff,mean_ff_bf_gap,mean_bf_ab_gap,mean_max_gap,largest_gap
-large_50_100_200,20,0.0,0.0,0.0,0.0,0.0,0.0,0
-near_identical_40_45,20,0.0,0.0,0.0,0.0,0.0,0.0,0
-sorted_largest_first_200,20,5.0,0.0,5.0,0.0,0.05,0.05,1
-sorted_smallest_first_200,20,0.0,0.0,0.0,0.0,0.0,0.0,0
-uniform_100,20,60.0,60.0,10.0,0.6,0.1,0.6,1
-uniform_1000,20,100.0,100.0,5.0,6.6,0.05,6.6,9
-weibull_200,20,65.0,65.0,10.0,0.65,0.1,0.7,2
