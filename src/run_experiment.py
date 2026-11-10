@@ -79,7 +79,7 @@ def main():
     parser.add_argument("--selection-temperature", type=float, default=1)
     parser.add_argument("--timeout", type=float, default=10.0)
     parser.add_argument("--prefix", default="final", help="Filename prefix expected by src.final_eval (default: final)")
-    parser.add_argument("--out-dir", type=Path, default=Path("outputs/final"), help="Folder containing candidate logs for src.final_eval")
+    parser.add_argument("--out-dir", type=Path, default=Path("outputs/final_experiment"), help="Folder containing candidate logs for src.final_eval")
     args = parser.parse_args()
     if args.runs < 1 or args.max_tokens < 1 or args.budget <= 0 or args.timeout <= 0:
         parser.error("runs, max-tokens, budget and timeout must be positive")

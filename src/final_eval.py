@@ -22,7 +22,7 @@ Outputs:
     heuristics/<run>.py             selected heuristic for each run
 
 Usage (from project root):
-    python -m src.final_eval --runs-dir outputs/final --prefix final
+    python -m src.final_eval --runs-dir outputs/final_experiment --prefix final
 """
 
 import argparse
@@ -124,7 +124,7 @@ def ms_per_instance(code, data):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--runs-dir", default=str(ROOT / "outputs" / "final"))
+    p.add_argument("--runs-dir", default=str(ROOT / "outputs" / "final_experiment"))
     p.add_argument("--prefix", default="final")
     p.add_argument("--out-dir", default=None)
     args = p.parse_args()
@@ -418,7 +418,7 @@ def enhanced_main():
     """Run the original final evaluation, then produce additional analysis."""
     # Parse the same arguments solely to locate the original inputs/outputs.
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--runs-dir", default=str(ROOT / "outputs" / "final"))
+    parser.add_argument("--runs-dir", default=str(ROOT / "outputs" / "final_experiment"))
     parser.add_argument("--prefix", default="final")
     parser.add_argument("--out-dir", default=None)
     args, _ = parser.parse_known_args()
