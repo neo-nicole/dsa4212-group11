@@ -28,33 +28,41 @@ Run every script as a module **from the project root**, e.g. `python -m src.fina
 ## Repository structure
 
 ```text
-data/final_data/        train / val / in-test / out-test splits
-src/
-  generate_instances.py   generate and load datasets
-  simulator.py            online packing simulator
-  baselines.py            First Fit, Best Fit, ab-First-Fit
-  ab_tuning.py            tune ab-First-Fit's parameters (a, b) on train
-  run_baselines.py        print baseline scores on every split
-  compare_baselines.py    per-instance baseline comparison tables
-  evaluation.py           shared evaluator
-  sandbox.py              isolated evaluator for LLM-generated code
-  llm_client.py           OpenRouter client with call logging
-  prompts/                prompt templates and starting program
-  run_pilot.py            Method A / B search loops (pilot)
-  run_method_a.py         run only Method A of the pilot
-  run_method_b.py         run only Method B of the pilot
-  resume_method_b.py      one-off script to resume pilot 1's Method B
-  evaluate_pilot_val.py   evaluate pilot candidates on the validation set
-  plot_pilot.py           pilot performance plots
-  run_experiment.py       main experiment
-  final_eval.py           selection, testing and analysis
-outputs/
-  final_data/             baseline results and tuned ab parameters
-  final_experiment/       main experiment candidate logs
-  final_eval/final/       final tables, figures and selected heuristics
-  pilot_1/, pilot_2/      pilot results
-  llm_logs/               raw LLM call logs
-report/                   project report
+.
+├── README.md
+├── authors.md
+├── requirements.txt
+├── .gitignore
+├── data/
+│   └── final_data/                # train / val / in-test / out-test splits
+├── src/
+│   ├── generate_instances.py      # generate and load datasets
+│   ├── simulator.py               # online packing simulator
+│   ├── baselines.py               # First Fit, Best Fit, ab-First-Fit
+│   ├── ab_tuning.py               # tune ab-First-Fit's parameters (a, b) on train
+│   ├── run_baselines.py           # print baseline scores on every split
+│   ├── compare_baselines.py       # per-instance baseline comparison tables
+│   ├── evaluation.py              # shared evaluator
+│   ├── sandbox.py                 # isolated evaluator for LLM-generated code
+│   ├── llm_client.py              # OpenRouter client with call logging
+│   ├── prompts/                   # prompt templates and starting program
+│   ├── run_pilot.py               # Method A / B search loops (pilot)
+│   ├── run_method_a.py            # run only Method A of the pilot
+│   ├── run_method_b.py            # run only Method B of the pilot
+│   ├── resume_method_b.py         # one-off script to resume pilot 1's Method B
+│   ├── evaluate_pilot_val.py      # evaluate pilot candidates on the validation set
+│   ├── plot_pilot.py              # pilot performance plots
+│   ├── run_experiment.py          # main experiment
+│   └── final_eval.py              # selection, testing and analysis
+├── outputs/
+│   ├── final_data/                # baseline results and tuned ab parameters
+│   ├── final_experiment/          # main experiment candidate logs
+│   ├── final_eval/
+│   │   └── final/                 # final tables, figures and selected heuristics
+│   ├── pilot_1/                   # pilot 1 results
+│   ├── pilot_2/                   # pilot 2 results
+│   └── llm_logs/                  # raw LLM call logs
+└── report/                        # project report
 ```
 
 ## Data
